@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCubicPlayer WASM - Full Interface</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+            margin: 0;
+        }
+
+        .header p {
+            color: #888;
+            margin: 5px 0;
+        }
+
+        #canvas {
+            border: 2px solid #444;
+            border-radius: 5px;
+            margin: 20px 0;
+            background-color: #000;
+        }
+
+        .status {
+            color: #888;
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .instructions {
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            max-width: 600px;
+            font-size: 12px;
+        }
+
+        .instructions h3 {
+            color: #ffff00;
+            margin-top: 0;
+        }
+
+        .loading {
+            display: none;
+            color: #ffff00;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .error {
+            color: #ff4444;
+            background-color: #220000;
+            border: 1px solid #440000;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        .visitor-file {
+            background-color: #1a1a1a;
+            border: 1px dashed #00ff00;
+            border-radius: 5px;
+            padding: 12px;
+            margin: 10px 0 0 0;
+            max-width: 600px;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .visitor-file input {
+            display: block;
+            margin: 8px auto 0 auto;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>OpenCubicPlayer WASM</h1>
+        <p>Version 3.5.0+wasm.0.1.0</p>
+        <p>Based on OpenCubicPlayer by Stian Skjelstad</p>
+    </div>
+
+    <div class="loading" id="loading">
+        <p>Loading OpenCubicPlayer WASM...</p>
+        <p id="loading-status" style="color: #00ff00; font-size: 12px; margin-top: 10px;"></p>
+    </div>
+
+    <div class="error" id="error"></div>
+
+    <canvas id="canvas" width="1280" height="1024" tabindex="0"></canvas>
+
+    <div class="status" id="status">
+        Ready - launch the in-player file selector to begin
+    </div>
+
+    <div class="status" id="playback-status" style="margin-bottom: 20px;">
+        Status: Idle
+    </div>
+
+    <div class="visitor-file" id="visitor-file">
+        <label for="visitor-file-input">Open a module from this computer</label>
+        <input id="visitor-file-input" type="file">
+        <p id="visitor-file-status">Choose a file, or drop it here. The player lists it in the file selector under /music.</p>
+    </div>
+
+    <script src="visitor-file.js"></script>
+    <script>
+        let isWasmLoaded = false;
+
+        function getCanvasElement() {
+            return document.getElementById('canvas');
+        }
+
+        function storeVisitorFile(file) {
+            const status = document.getElementById('visitor-file-status');
+            if (!file) {
+                return;
+            }
+            if (status) {
+                status.textContent = 'Storing ' + file.name + ' ...';
+            }
+            file.arrayBuffer().then(function(buffer) {
+                const attempt = function() {
+                    const fs = (window.Module && window.Module.FS) ? window.Module.FS : null;
+                    /* FS exists before wasm memory views. Writing earlier throws inside FS.write. */
+                    if (!fs || !window.Module.calledRun || typeof ocpStoreVisitorFile !== 'function') {
+                        setTimeout(attempt, 200);
+                        return;
+                    }
+                    try {
+                        const stored = ocpStoreVisitorFile(fs, file.name, new Uint8Array(buffer));
+                        if (window.Module && typeof window.Module._wasm_filesel_rescan === 'function') {
+                            window.Module._wasm_filesel_rescan();
+                        }
+                        if (status) {
+                            status.textContent = file.name + ' is in the file selector at ' + stored + '. Open it from the /music directory.';
+                        }
+                    } catch (err) {
+                        if (status) {
+                            status.textContent = 'Could not store ' + file.name + ': ' + err.message;
+                        }
+                    }
+                };
+                attempt();
+            }).catch(function(err) {
+                if (status) {
+                    status.textContent = 'Could not read ' + file.name + ': ' + err.message;
+                }
+            });
+        }
+
+        function installVisitorFileControl() {
+            const input = document.getElementById('visitor-file-input');
+            const drop = document.getElementById('visitor-file');
+            if (input) {
+                input.addEventListener('change', function() {
+                    if (input.files && input.files[0]) {
+                        storeVisitorFile(input.files[0]);
+                    }
+                });
+            }
+            if (drop) {
+                drop.addEventListener('dragover', function(event) {
+                    event.preventDefault();
+                });
+                drop.addEventListener('drop', function(event) {
+                    event.preventDefault();
+                    const dropped = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+                    if (dropped) {
+                        storeVisitorFile(dropped);
+                    }
+                });
+            }
+        }
+        installVisitorFileControl();
+
+        function focusCanvas(preventScroll, canvasOverride) {
+            const canvas = canvasOverride || getCanvasElement();
+            if (!canvas) {
+                return;
+            }
+
+            try {
+                canvas.focus({ preventScroll: !!preventScroll });
+            } catch (err) {
+                canvas.focus();
+            }
+        }
+
+        const wasmPluginManifest = [
+            // Audio Output Devices
+            {
+                name: 'devpsdl2',
+                url: 'devpsdl2.wasm',
+                type: 'device',
+                description: 'SDL2 audio output driver for WebAudio',
+                formats: []
+            },
+            {
+                name: 'devpnone',
+                url: 'devpnone.wasm',
+                type: 'device',
+                description: 'Null audio output device (no sound)',
+                formats: []
+            },
+
+            // Mixer Devices
+            {
+                name: 'devwmix',
+                url: 'devwmix.wasm',
+                type: 'device',
+                description: 'Integer wavetable mixer for module playback',
+                formats: []
+            },
+            {
+                name: 'devwmixf',
+                url: 'devwmixf.wasm',
+                type: 'device',
+                description: 'Floating-point wavetable mixer (higher quality)',
+                formats: []
+            },
+            {
+                name: 'devwnone',
+                url: 'devwnone.wasm',
+                type: 'device',
+                description: 'Null wavetable device',
+                formats: []
+            },
+
+            // Audio Effects
+            {
+                name: 'freverb',
+                url: 'freverb.wasm',
+                type: 'effect',
+                description: 'FreeVerb reverb and echo effects',
+                formats: []
+            },
+            {
+                name: 'ireverb',
+                url: 'ireverb.wasm',
+                type: 'effect',
+                description: 'Interpolated reverb effect',
+                formats: []
+            },
+
+            // Tracker Module Players
+            {
+                name: 'playxm',
+                url: 'playxm.wasm',
+                type: 'player',
+                description: 'FastTracker II / ScreamTracker / ProTracker module player',
+                formats: ['.mod', '.xm', '.s3m', '.stm', '.669', '.far', '.mtm', '.ult', '.wow']
+            },
+            {
+                name: 'playit',
+                url: 'playit.wasm',
+                type: 'player',
+                description: 'Impulse Tracker module player',
+                formats: ['.it']
+            },
+            {
+                name: 'playgmd',
+                url: 'playgmd.wasm',
+                type: 'player',
+                description: 'Generic module driver for various tracker formats',
+                formats: ['.ult', '.669', '.mod', '.wow']
+            },
+
+            // Chiptune / 8-bit Computer Music
+            {
+                name: 'playsid',
+                url: 'playsid.wasm',
+                type: 'player',
+                description: 'Commodore 64 SID music player (libsidplayfp)',
+                formats: ['.sid', '.psid', '.rsid', '.mus', '.str', '.prg', '.p00']
+            },
+            {
+                name: 'playym',
+                url: 'playym.wasm',
+                type: 'player',
+                description: 'Atari ST YM2149 chip music player',
+                formats: ['.ym']
+            },
+            {
+                name: 'playay',
+                url: 'playay.wasm',
+                type: 'player',
+                description: 'ZX Spectrum / Amstrad CPC AY-3-8910 chip music player',
+                formats: ['.ay']
+            },
+            {
+                name: 'playhvl',
+                url: 'playhvl.wasm',
+                type: 'player',
+                description: 'Hively Tracker / AHX music player (Amiga-style)',
+                formats: ['.hvl', '.ahx']
+            },
+
+            // AdLib / OPL Music
+            {
+                name: 'playopl',
+                url: 'playopl.wasm',
+                type: 'player',
+                description: 'AdLib / OPL2/OPL3 FM synthesis music player',
+                formats: ['.dro', '.rad', '.imf', '.wlf', '.adl']
+            },
+
+            // Game Console Music
+            {
+                name: 'playgme',
+                url: 'playgme.wasm',
+                type: 'player',
+                description: 'Game Music Emu player (NES, SNES, Game Boy, Genesis, etc.)',
+                formats: ['.nsf', '.nsfe', '.spc', '.gym', '.vgm', '.vgz', '.gbs', '.ay', '.sap', '.kss', '.hes']
+            },
+
+            // MIDI
+            {
+                name: 'playtimidity',
+                url: 'playtimidity.wasm',
+                type: 'player',
+                description: 'MIDI file player (TiMidity++ with GUS patches)',
+                formats: ['.mid', '.midi', '.rmi', '.kar']
+            },
+
+            // Modern Audio Formats
+            {
+                name: 'playflac',
+                url: 'playflac.wasm',
+                type: 'player',
+                description: 'FLAC lossless audio player',
+                formats: ['.flac']
+            },
+            {
+                name: 'playwav',
+                url: 'playwav.wasm',
+                type: 'player',
+                description: 'WAV/RIFF audio player',
+                formats: ['.wav']
+            },
+            {
+                name: 'playogg',
+                url: 'playogg.wasm',
+                type: 'player',
+                description: 'OGG Vorbis audio player',
+                formats: ['.ogg', '.oga']
+            },
+            {
+                name: 'playmp2',
+                url: 'playmp2.wasm',
+                type: 'player',
+                description: 'MPEG audio player (MP2/MP3)',
+                formats: ['.mp1', '.mp2', '.mp3']
+            },
+            {
+                name: 'modland',
+                url: 'modland.wasm',
+                type: 'filesystem',
+                description: 'Modland.com virtual filesystem driver',
+                formats: []
+            }
+        ];
+
+        // Show loading indicator
+        document.getElementById('loading').style.display = 'block';
+
+        // Load WASM side modules (plugins)
+        async function loadPlugins() {
+            console.log('[Plugin Loader] Loading side modules...');
+
+            if (wasmPluginManifest.length === 0) {
+                console.log('[Plugin Loader] No plugins listed in manifest');
+                return;
+            }
+
+            try {
+                if (!Module.FS.analyzePath('/program').exists) {
+                    Module.FS.mkdir('/program');
+                    console.log('[Plugin Loader] Created /program directory');
+                }
+
+                if (!Module.FS.analyzePath('/program/autoload').exists) {
+                    Module.FS.mkdir('/program/autoload');
+                    console.log('[Plugin Loader] Created /program/autoload directory');
+                }
+
+                for (const plugin of wasmPluginManifest) {
+                    console.log(`[Plugin Loader] Fetching ${plugin.name} from ${plugin.url}...`);
+                    if (window.updateLoadingStatus) {
+                        window.updateLoadingStatus(`Loading ${plugin.name}...`);
+                    }
+                    const response = await fetch(plugin.url);
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch ${plugin.url}: ${response.status}`);
+                    }
+
+                    const wasmBinary = new Uint8Array(await response.arrayBuffer());
+                    const targetPath = `/program/autoload/${plugin.name}.wasm`;
+
+                    if (Module.FS.analyzePath(targetPath).exists) {
+                        console.log(`[Plugin Loader] Overwriting existing ${targetPath}`);
+                        Module.FS.unlink(targetPath);
+                    }
+
+                    Module.FS.writeFile(targetPath, wasmBinary);
+                    console.log(`[Plugin Loader] Staged ${plugin.name} to ${targetPath}`);
+                }
+
+                console.log('[Plugin Loader] Plugins staged successfully');
+            } catch (err) {
+                console.error('[Plugin Loader] Error loading plugins:', err);
+                throw err;
+            }
+        }
+
+        // Setup emscripten module
+        var Module = {
+            preRun: [
+                function() {
+                    if (typeof Module.addRunDependency !== 'function') {
+                        return;
+                    }
+
+                    var manifestUrl = 'sample-files/manifest.json';
+                    Module.addRunDependency('sampleManifest');
+
+                    function getFS() {
+                        if (Module.FS) {
+                            return Module.FS;
+                        }
+                        if (typeof FS !== 'undefined') {
+                            return FS;
+                        }
+                        return null;
+                    }
+
+                    function ensureDir(fs, path) {
+                        if (fs.analyzePath(path).exists) {
+                            return;
+                        }
+                        if (fs.mkdirTree) {
+                            fs.mkdirTree(path);
+                        } else {
+                            var segments = path.split('/').filter(Boolean);
+                            var current = '';
+                            for (var i = 0; i < segments.length; i++) {
+                                current += '/' + segments[i];
+                                if (!fs.analyzePath(current).exists) {
+                                    fs.mkdir(current);
+                                }
+                            }
+                        }
+                    }
+
+                    (function() {
+                        var removed = false;
+                        function finish() {
+                            if (!removed) {
+                                removed = true;
+                                Module.removeRunDependency('sampleManifest');
+                            }
+                        }
+
+                        function stageManifest(manifest) {
+                            if (!Array.isArray(manifest)) {
+                                console.warn('[Samples] Manifest is not an array');
+                                finish();
+                                return;
+                            }
+
+                            Module.sampleRemoteMap = Module.sampleRemoteMap || {};
+
+                            (function attemptInstall() {
+                                var fs = getFS();
+                                if (!fs) {
+                                    setTimeout(attemptInstall, 0);
+                                    return;
+                                }
+
+                                ensureDir(fs, '/music');
+                                console.log('[Samples] Staging ' + manifest.length + ' on-demand sample files');
+
+                                function registerSampleEntry(info, aliases) {
+                                    if (!Array.isArray(aliases)) {
+                                        return;
+                                    }
+                                    var seen = Object.create(null);
+                                    aliases.forEach(function(alias) {
+                                        if (!alias || typeof alias !== 'string') {
+                                            return;
+                                        }
+                                        if (!alias.length || seen[alias]) {
+                                            return;
+                                        }
+                                        seen[alias] = true;
+                                        Module.sampleRemoteMap[alias] = info;
+
+                                        if (alias.charCodeAt(0) === 47 /* '/' */ && alias.length > 1) {
+                                            var trimmed = alias.slice(1);
+                                            if (!seen[trimmed]) {
+                                                seen[trimmed] = true;
+                                                Module.sampleRemoteMap[trimmed] = info;
+                                            }
+                                        } else if (alias.charCodeAt(0) !== 47) {
+                                            var prefixed = '/' + alias;
+                                            if (!seen[prefixed]) {
+                                                seen[prefixed] = true;
+                                                Module.sampleRemoteMap[prefixed] = info;
+                                            }
+                                        }
+
+                                        if (typeof PATH !== 'undefined' && PATH.normalize) {
+                                            var normalizedAlias = PATH.normalize(alias);
+                                            if (normalizedAlias && !seen[normalizedAlias]) {
+                                                seen[normalizedAlias] = true;
+                                                Module.sampleRemoteMap[normalizedAlias] = info;
+                                            }
+                                            if (normalizedAlias && normalizedAlias.charCodeAt(0) === 47 && normalizedAlias.length > 1) {
+                                                var normalizedTrimmed = normalizedAlias.slice(1);
+                                                if (!seen[normalizedTrimmed]) {
+                                                    seen[normalizedTrimmed] = true;
+                                                    Module.sampleRemoteMap[normalizedTrimmed] = info;
+                                                }
+                                            }
+                                            if (normalizedAlias && normalizedAlias.charCodeAt(0) !== 47 && normalizedAlias.length) {
+                                                var normalizedPrefixed = '/' + normalizedAlias;
+                                                if (!seen[normalizedPrefixed]) {
+                                                    seen[normalizedPrefixed] = true;
+                                                    Module.sampleRemoteMap[normalizedPrefixed] = info;
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
+
+                                manifest.forEach(function(entry) {
+                                    if (!entry || typeof entry.path !== 'string' || !entry.path.length) {
+                                        return;
+                                    }
+
+                                    var relativePath = entry.path;
+                                    var parts = relativePath.split('/');
+                                    var filename = parts.pop();
+                                    var dir = '/music';
+
+                                    parts.forEach(function(part) {
+                                        if (!part) {
+                                            return;
+                                        }
+                                        dir += '/' + part;
+                                        ensureDir(fs, dir);
+                                    });
+
+                                    var fullPath = dir + '/' + filename;
+                                    var normalizedFullPath = (typeof PATH !== 'undefined' && PATH.normalize) ? PATH.normalize(fullPath) : fullPath;
+                                    var sourceUrl = 'sample-files/' + parts.concat([filename]).map(encodeURIComponent).join('/');
+                                    var analyzeResult = null;
+                                    var fileSize = 0;
+                                    var exists = false;
+
+                                    try {
+                                        analyzeResult = fs.analyzePath(normalizedFullPath);
+                                        exists = !!(analyzeResult && analyzeResult.exists);
+                                        if (exists) {
+                                            try {
+                                                var stat = fs.stat(normalizedFullPath);
+                                                if (stat && typeof stat.size === 'number') {
+                                                    fileSize = stat.size;
+                                                }
+                                            } catch (statErr) {
+                                                // Ignore stat errors; we'll treat as unknown size
+                                            }
+                                        }
+                                    } catch (analyzeErr) {
+                                        console.warn('[Samples] analyzePath failed for', normalizedFullPath, analyzeErr);
+                                    }
+
+                                    if (!exists) {
+                                        try {
+                                            // Create parent directory if needed
+                                            var parentDir = normalizedFullPath.substring(0, normalizedFullPath.lastIndexOf('/'));
+                                            if (parentDir && !fs.analyzePath(parentDir).exists) {
+                                                ensureDir(fs, parentDir);
+                                            }
+
+                                            // Create a REAL 0-byte file, not a lazy file
+                                            // Force it to have actual contents (empty array) rather than null
+                                            fs.writeFile(normalizedFullPath, new Uint8Array(0), { canOwn: false });
+
+                                            // Verify it was created correctly
+                                            var checkNode = fs.lookupPath(normalizedFullPath).node;
+                                            if (!checkNode) {
+                                                console.error('[Samples] Failed to create node for', normalizedFullPath);
+                                                return;
+                                            }
+                                            if (checkNode.contents === null) {
+                                                console.warn('[Samples] Warning: Node created with null contents for', normalizedFullPath, '- forcing to empty array');
+                                                checkNode.contents = new Uint8Array(0);
+                                            }
+                                        } catch (writeErr) {
+                                            console.error('[Samples] Failed to create placeholder for', relativePath, writeErr);
+                                            return;
+                                        }
+                                    }
+
+                                    var info = Module.sampleRemoteMap[normalizedFullPath] || {
+                                        url: sourceUrl
+                                    };
+                                    info.url = sourceUrl;
+                                    info.size = entry.size || 0;
+                                    info.fsPath = normalizedFullPath;
+                                    info.downloaded = exists && fileSize > 0;
+
+                                    // Store optional metadata fields from manifest
+                                    if (entry.title) info.title = entry.title;
+                                    if (entry.composer) info.composer = entry.composer;
+                                    if (entry.artist) info.artist = entry.artist;
+                                    if (entry.modtype) info.modtype = entry.modtype;
+                                    if (typeof entry.channels === 'number') info.channels = entry.channels;
+                                    if (typeof entry.playtime === 'number') info.playtime = entry.playtime;
+                                    if (entry.style) info.style = entry.style;
+                                    if (entry.comment) info.comment = entry.comment;
+                                    if (entry.album) info.album = entry.album;
+                                    if (typeof entry.date === 'number') info.date = entry.date;
+                                    info.hasMetadata = !!(entry.title || entry.composer || entry.artist || entry.modtype);
+
+                                    var aliasCandidates = [
+                                        normalizedFullPath,
+                                        fullPath,
+                                        relativePath
+                                    ];
+
+                                    if (relativePath && relativePath.length) {
+                                        aliasCandidates.push('music/' + relativePath);
+                                        aliasCandidates.push('/music/' + relativePath);
+                                        if (typeof PATH !== 'undefined' && PATH.normalize) {
+                                            aliasCandidates.push(PATH.normalize(relativePath));
+                                            aliasCandidates.push(PATH.normalize('music/' + relativePath));
+                                            aliasCandidates.push(PATH.normalize('/music/' + relativePath));
+                                        }
+                                    }
+
+                                    registerSampleEntry(info, aliasCandidates);
+                                });
+
+                                Module.sampleManifestLoaded = true;
+                                finish();
+                            })();
+                        }
+
+                        fetch(manifestUrl, { cache: 'no-cache' })
+                            .then(function(response) {
+                                if (!response.ok) {
+                                    throw new Error('HTTP ' + response.status + ' for ' + manifestUrl);
+                                }
+                                return response.json();
+                            })
+                            .then(stageManifest)
+                            .catch(function(err) {
+                                console.warn('[Samples] Manifest fetch failed:', err);
+                                finish();
+                            });
+                    })();
+                }
+            ],
+            canvas: (() => {
+                const canvas = getCanvasElement();
+                if (canvas) {
+                    canvas.addEventListener('click', () => focusCanvas(true, canvas));
+                }
+                return canvas;
+            })(),
+            updateLoadingStatus: function(message) {
+                if (window.updateLoadingStatus) {
+                    window.updateLoadingStatus(message);
+                }
+            },
+            onRuntimeInitialized: async function() {
+                console.log('OpenCubicPlayer WASM loaded successfully');
+
+                // Load plugins as side modules
+                try {
+                    await loadPlugins();
+                    console.log('Plugins loaded successfully');
+
+                    let startResult = 0;
+                    try {
+                        startResult = await Module.ccall('wasm_start_ocp', 'number', [], [], { async: true });
+                    } catch (err) {
+                        if (err === 'unwind' || err?.message === 'unwind') {
+                            // Expected when emscripten installs the main loop.
+                            startResult = 0;
+                            console.log('OCP main loop scheduled (unwind).');
+                        } else {
+                            throw err;
+                        }
+                    }
+
+                    if (startResult < 0) {
+                        throw new Error(`wasm_start_ocp failed with code ${startResult}`);
+                    }
+
+                    console.log('OCP runtime initialized');
+                } catch (err) {
+                    console.error('Failed to load plugins:', err);
+                    showError('Failed to load plugins: ' + err);
+                    return;
+                }
+
+                isWasmLoaded = true;
+
+                // Keep loading indicator visible for a moment so users can see the final status
+                setTimeout(function() {
+                    const loadingIndicator = document.getElementById('loading');
+                    if (loadingIndicator) {
+                        loadingIndicator.style.transition = 'opacity 0.5s';
+                        loadingIndicator.style.opacity = '0';
+                        setTimeout(function() {
+                            loadingIndicator.remove();
+                        }, 500);
+                    }
+                }, 1000); // Show final status for 1 second
+
+                // Update loading status with completion message
+                window.updateLoadingStatus('Initialization complete!');
+                updateStatus('OpenCubicPlayer WASM ready - use the in-app selector to load music');
+
+                // Set up Web Audio Context for user interaction
+                initializeAudioContext();
+
+                // Focus the canvas immediately and aggressively maintain focus
+                if (Module.canvas) {
+                    focusCanvas(true, Module.canvas);
+
+                    // Continuously refocus canvas if focus is lost (for first few seconds)
+                    let refocusAttempts = 0;
+                    const refocusInterval = setInterval(() => {
+                        if (refocusAttempts++ < 20) { // Try for 2 seconds
+                            if (document.activeElement !== Module.canvas) {
+                                focusCanvas(true, Module.canvas);
+                            }
+                        } else {
+                            clearInterval(refocusInterval);
+                        }
+                    }, 100);
+                }
+            },
+            onAbort: function(what) {
+                console.error('WASM aborted:', what);
+                showError('Failed to load OpenCubicPlayer WASM');
+            }
+        };
+
+        // Initialize Web Audio Context handling
+        function initializeAudioContext() {
+            // SDL2 in emscripten creates the AudioContext automatically
+            // We just need to ensure it's resumed on user interaction
+            console.log('Audio context initialized - ready for user interaction');
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Function to update loading status - called from C code
+        window.updateLoadingStatus = function(message) {
+            const statusElement = document.getElementById('loading-status');
+            if (statusElement) {
+                statusElement.textContent = message;
+                statusElement.scrollTop = statusElement.scrollHeight;
+                console.log('[Loading] ' + message);
+            } else {
+                console.log('[Loading] (no element yet) ' + message);
+            }
+        };
+
+        // Control functions
+        function playMusic() {
+            if (!isWasmLoaded) return;
+
+            try {
+                // Resume Web Audio Context if needed (required for modern browsers)
+                let audioPromise = Promise.resolve();
+
+                // Check SDL audio context
+                if (typeof SDL !== 'undefined' && SDL.audioContext) {
+                    if (SDL.audioContext.state === 'suspended') {
+                        console.log('Resuming SDL Web Audio Context...');
+                        audioPromise = SDL.audioContext.resume();
+                    }
+                }
+
+                // Check Module audio context (alternative location)
+                if (typeof Module !== 'undefined' && Module.audioContext) {
+                    if (Module.audioContext.state === 'suspended') {
+                        console.log('Resuming Module Web Audio Context...');
+                        audioPromise = Module.audioContext.resume();
+                    }
+                }
+
+                audioPromise.then(() => {
+                    console.log('Web Audio Context ready, starting playback...');
+                    Module.ccall('play', null, [], []);
+                    document.getElementById('playback-status').textContent = 'Status: Playing';
+                    updateStatus('Playback started');
+                }).catch((error) => {
+                    console.error('Failed to resume Web Audio Context:', error);
+                    // Try to start playback anyway
+                    Module.ccall('play', null, [], []);
+                    document.getElementById('playback-status').textContent = 'Status: Playing';
+                    updateStatus('Playback started');
+                });
+
+            } catch (error) {
+                showError('Failed to start playback: ' + error.message);
+            }
+        }
+
+        function pauseMusic() {
+            if (!isWasmLoaded) return;
+
+            try {
+                Module.ccall('pause_playback', null, [], []);
+                document.getElementById('playback-status').textContent = 'Status: Paused';
+                updateStatus('Paused');
+            } catch (error) {
+                showError('Failed to pause playback: ' + error.message);
+            }
+        }
+
+        function stopMusic() {
+            if (!isWasmLoaded) return;
+
+            try {
+                Module.ccall('stop', null, [], []);
+                document.getElementById('playback-status').textContent = 'Status: Stopped';
+                updateStatus('Stopped');
+            } catch (error) {
+                showError('Failed to stop playback: ' + error.message);
+            }
+        }
+
+        // SDL2 is configured to listen on document level (via SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT)
+        // DO NOT add any JavaScript keyboard handlers here - they will intercept events before SDL gets them!
+        // Just ensure the canvas is focused when the page loads
+
+        // Focus canvas on any click to ensure keyboard events work
+        document.addEventListener('click', () => {
+            const canvas = getCanvasElement();
+            if (canvas && isWasmLoaded) {
+                focusCanvas(true, canvas);
+            }
+        });
+    </script>
+
+    <!-- Hook AudioContext BEFORE WASM loads to capture SDL's creation -->
+    <script>
+        (function() {
+            const OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!OriginalAudioContext) {
+                return;
+            }
+
+            // Create a wrapper that captures any AudioContext creation
+            function HookedAudioContext(...args) {
+                const ctx = new OriginalAudioContext(...args);
+
+                // Store in Module for C code to access
+                if (typeof Module === 'undefined') {
+                    window.Module = {};
+                }
+                Module._capturedAudioContext = ctx;
+
+                return ctx;
+            }
+
+            // Copy prototype and static properties
+            HookedAudioContext.prototype = OriginalAudioContext.prototype;
+            Object.setPrototypeOf(HookedAudioContext, OriginalAudioContext);
+
+            // Replace global constructors
+            window.AudioContext = HookedAudioContext;
+            window.webkitAudioContext = HookedAudioContext;
+        })();
+    </script>
+
+    <!-- IDBFS Persistence: Save data before page unload -->
+    <script>
+        (function() {
+            // Track if IDBFS sync is in progress
+            let idbfsSyncInProgress = false;
+
+            // Handler for page visibility changes and unload
+            function syncIDBFSBeforeUnload() {
+                if (idbfsSyncInProgress) {
+                    console.log('IDBFS sync already in progress, skipping');
+                    return;
+                }
+
+                if (!Module || !Module.FS || !Module.FS.syncfs) {
+                    console.log('IDBFS not available yet');
+                    return;
+                }
+
+                console.log('Syncing IDBFS before page unload...');
+                idbfsSyncInProgress = true;
+
+                try {
+                    // Synchronous sync attempt (browser may kill us before async completes)
+                    Module.FS.syncfs(false, function(err) {
+                        idbfsSyncInProgress = false;
+                        if (err) {
+                            console.error('IDBFS sync error on unload:', err);
+                        } else {
+                            console.log('IDBFS sync completed successfully');
+                        }
+                    });
+                } catch (e) {
+                    console.error('IDBFS sync exception:', e);
+                    idbfsSyncInProgress = false;
+                }
+            }
+
+            // Page visibility API - sync when page becomes hidden
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    syncIDBFSBeforeUnload();
+                }
+            });
+
+            // Beforeunload event - final sync attempt
+            window.addEventListener('beforeunload', function(e) {
+                syncIDBFSBeforeUnload();
+                // Note: Modern browsers ignore custom messages, but we still call syncfs
+            });
+
+            // Periodic background sync (every 60 seconds)
+            setInterval(function() {
+                if (!document.hidden && !idbfsSyncInProgress && Module && Module.FS && Module.FS.syncfs) {
+                    console.log('Periodic IDBFS background sync...');
+                    idbfsSyncInProgress = true;
+                    Module.FS.syncfs(false, function(err) {
+                        idbfsSyncInProgress = false;
+                        if (err) {
+                            console.error('Periodic IDBFS sync error:', err);
+                        } else {
+                            console.log('Periodic IDBFS sync completed');
+                        }
+                    });
+                }
+            }, 60000); // 60 seconds
+
+            console.log('IDBFS persistence handlers installed');
+        })();
+    </script>
+
+    <!-- Provide dynCall fallbacks for modern Emscripten builds before ocp.js loads -->
+    <script>
+        (function() {
+            const signatures = [
+                'i','ii','iii','iiii','iiiii','iiiiii','iiiiiii','iiiiiiii','iiiiiiiiiii',
+                'iiiiiiiiiiii','iiiiiiiiiiiii','iiiiij','iiiiijj','iiiiid','iiji',
+                'diii','fiii','j','ji','jii','jiii','jiiii','v','vi','vii','viii','viiii',
+                'viiiii','viiiiii','viiiiiii','viiiiiiiiii','viiiiiiiiiiiiiii','viij',
+                'viijj','viijii','viif','viid','viiifi','viiidi'
+            ];
+
+            const globalObj = typeof globalThis !== 'undefined'
+                ? globalThis
+                : (typeof window !== 'undefined' ? window : self);
+
+            globalObj.Module = globalObj.Module || {};
+
+            function resolveTable() {
+                if (globalObj.Module && globalObj.Module.wasmTable) {
+                    return globalObj.Module.wasmTable;
+                }
+                if (typeof globalObj.wasmTable !== 'undefined') {
+                    return globalObj.wasmTable;
+                }
+                return null;
+            }
+
+            function makeDynCall(sig) {
+                return function(index, ...args) {
+                    const table = resolveTable();
+                    if (!table) {
+                        throw new Error('dynCall_' + sig + ' invoked before wasmTable is ready');
+                    }
+                    const fn = table.get(index);
+                    return fn.apply(null, args);
+                };
+            }
+
+            signatures.forEach((sig) => {
+                const name = 'dynCall_' + sig;
+                if (!globalObj[name]) {
+                    globalObj[name] = makeDynCall(sig);
+                }
+                if (!globalObj.Module[name]) {
+                    globalObj.Module[name] = globalObj[name];
+                }
+            });
+
+            if (!globalObj.Module.dynCall) {
+                globalObj.Module.dynCall = function(signature, index, ...args) {
+                    const table = resolveTable();
+                    if (!table) {
+                        throw new Error('dynCall invoked before wasmTable is ready');
+                    }
+                    const fn = table.get(index);
+                    return fn.apply(null, args);
+                };
+            }
+
+        })();
+    </script>
+
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <ul>
+            <li>Use "Open a module from this computer" above, or drop a file on that box. The bytes are written to /music and show up in the on-canvas file selector.</li>
+            <li>Open the file from that selector. Playback controls are the desktop player's keys inside the canvas. F returns to the selector during playback. Esc returns to the selector in this browser build. Press F1 inside the player for the rest of the keys.</li>
+            <li>Audio CD and MusicBrainz lookups are not in this build. There is no service worker. Settings are stored in this browser under /home/web_user/.ocp; closing the tab can drop the last write.</li>
+            <li>GNU GPL version 2. Source for this page is the ocp-wasm-0.1.0 tag. See COPYING and UNIFONT-LICENSE.txt.</li>
+        </ul>
+    </div>
+
+    <!-- Load the generated WASM script -->
+    <script src="ocp.js?v=8"></script>
+</body>
+</html>
