@@ -211,3 +211,7 @@ static void modland_com_mirror_Run (const struct DevInterfaceAPI_t *API)
 		API->console->FrameLock();
 	}
 }
+
+#ifdef OCP_WASM_FILESEL_STEPPER
+#include "wasm-stepper/modland-com-mirrors-stepper.inc.c"
+#endif

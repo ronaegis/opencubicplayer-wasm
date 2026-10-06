@@ -1,8 +1,29 @@
 # Open Cubic Player
 
-Unix port of [Open Cubic Player](https://www.cubic.org/player/), which is a text-based player with some few graphical views.
-Visual output can be done through nCurses, Linux console (VCSA + FrameBuffer), X11 or SDL.
-This port can be compiled for various different Unix-based operating systems, including MinGW compilers.
+This tree is a fork of Stian Skjelstad's UNIX OpenCubicPlayer, https://github.com/mywave82/opencubicplayer, which is itself the UNIX port of [Open Cubic Player](https://www.cubic.org/player/). The UNIX player is a text-based player with some few graphical views. Visual output can be done through nCurses, Linux console (VCSA + FrameBuffer), X11, or SDL/SDL2/SDL3. This port can be compiled for various different Unix-based operating systems, including MinGW compilers.
+
+Desktop bugs that reproduce on the upstream tree belong at https://github.com/mywave82/opencubicplayer. Browser-port bugs belong on this fork: https://github.com/ronaegis/opencubicplayer-wasm/issues.
+
+Desktop build of this tree:
+
+```bash
+git submodule update --init
+./configure && make
+```
+
+macOS notes are in README.Darwin and in the section below. `brew install ocp` installs the upstream package from Homebrew, not this tree.
+
+# WebAssembly build (experimental)
+
+Browser port of the same player. It draws the cpiface UI into a 1280×1024 canvas. Version 3.5.0+wasm.0.1.0. Build and run instructions are in wasm/README.md. The page can open a module from the computer; that file is listed by the in-canvas file selector under /music.
+
+Live demo: https://ronaegis.github.io/opencubicplayer-wasm/
+
+```bash
+# Emscripten 5.0.2 (emcc on PATH)
+./wasm/build.sh
+cd wasm/build && python3 -m http.server 8080
+```
 
 ![Screenshot](doc/screenshot-01.png)
 
@@ -247,7 +268,7 @@ If the filenames on your system contains version numbers, we ask you to fill a b
 
 ## Installing on macOS
 
-Use: `brew install ocp`
+`brew install ocp` installs upstream OpenCubicPlayer from Homebrew. It does not build or install this fork. To build this tree on macOS, use the desktop commands at the top of this file and the notes below.
 
 ### Additional notes for Darwin
 

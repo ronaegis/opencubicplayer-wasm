@@ -49,7 +49,33 @@ static int do_zip_debug_print=1;
 #endif
 
 #include "filesystem-zip-headers.c"
+#ifdef OCP_NO_BZIP2
+struct zip_bzip2_t
+{
+	uint8_t out_buffer_readnext_storage;
+	uint8_t *out_buffer_readnext;
+	int out_buffer_fill;
+	int need_deinit;
+	int eof_hit;
+};
+static int zip_bzip2_init (struct zip_bzip2_t *self)
+{
+	if (!self)
+	{
+		return -1;
+	}
+	self->out_buffer_readnext = &self->out_buffer_readnext_storage;
+	self->out_buffer_fill = 0;
+	self->need_deinit = 0;
+	self->eof_hit = 1;
+	return -1;
+}
+static void zip_bzip2_done (struct zip_bzip2_t *self) { (void)self; }
+static int64_t zip_bzip2_digest (struct zip_bzip2_t *self) { (void)self; return -1; }
+static int zip_bzip2_feed (struct zip_bzip2_t *self, uint8_t *src, uint32_t len) { (void)self; (void)src; (void)len; return -1; }
+#else
 #include "zip-bzip2.c"
+#endif
 #include "zip-expand.c"
 #include "zip-explode.c"
 #include "zip-inflate.c"

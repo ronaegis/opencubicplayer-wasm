@@ -554,6 +554,16 @@ static void devw_save_devices (const struct DevInterfaceAPI_t *API)
 	free (tmp);
 }
 
+#ifdef OCP_WASM_DIALOG_STEPPER
+/* WASM build: Use non-blocking stepper implementation */
+#include "../wasm/generic-dialog-stepper.h"
+#include "../wasm/devw-dialog-stepper.c"
+static void setup_devw_run (void **token, const struct DevInterfaceAPI_t *API)
+{
+	wasm_setup_devw_run(token, API);
+}
+#else
+/* Native build: Use original blocking implementation */
 static void setup_devw_run (void **token, const struct DevInterfaceAPI_t *API)
 {
 	int dsel = 0;
@@ -676,6 +686,7 @@ static void setup_devw_run (void **token, const struct DevInterfaceAPI_t *API)
 		API->console->FrameLock();
 	}
 }
+#endif /* OCP_WASM_DIALOG_STEPPER */
 
 DLLEXTINFO_CORE_PREFIX struct linkinfostruct dllextinfo =
 {

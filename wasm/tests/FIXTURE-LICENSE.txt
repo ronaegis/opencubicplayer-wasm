@@ -1,0 +1,5 @@
+wasm/tests/test.mod is an original silent 4-channel ProTracker module
+written for this test suite (title "OCP WASM silent", signature M.K.,
+one empty pattern, no samples). It is part of this project and is
+covered by the GNU General Public License, version 2, in the root
+COPYING file. It is not a third-party recording.

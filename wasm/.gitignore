@@ -1,0 +1,16 @@
+# Build artifacts
+.emcache/
+.emcc-cache/
+
+# CMake build files
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+build/
+tests/build
+tests/node_modules/
+
+# Playsid build-generated files
+playsid-generated/
+*.o65

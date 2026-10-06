@@ -2643,6 +2643,8 @@ static interfaceReturnEnum plmpDrawScreen(void)
 	{
 		uint16_t key = Console.KeyboardGetChar();
 
+#ifndef __EMSCRIPTEN__
+		/* WASM: Disable quit-on-double-ESC behavior for browser environment */
 		if (plEscTick)
 		{
 			plEscTick=0;
@@ -2651,6 +2653,7 @@ static interfaceReturnEnum plmpDrawScreen(void)
 				return interfaceReturnQuit;
 			}
 		}
+#endif
 
 
 		if (key == KEY_ALT_K)
@@ -2670,10 +2673,20 @@ static interfaceReturnEnum plmpDrawScreen(void)
 		{
 			struct cpimoderegstruct *mod;
 			case KEY_EXIT:
+#ifdef __EMSCRIPTEN__
+				/* WASM: Don't allow quitting via KEY_EXIT in browser */
+				break;
+#else
 				return interfaceReturnQuit;
+#endif
 			case KEY_ESC:
+#ifdef __EMSCRIPTEN__
+				/* WASM: ESC returns to file selector instead of quitting */
+				return interfaceReturnCallFs;
+#else
 				plEscTick = clock_ms();
 				break;
+#endif
 			case _KEY_ENTER:
 				return interfaceReturnNextManuel;
 			case 'f': case 'F':
@@ -2709,7 +2722,11 @@ static interfaceReturnEnum plmpDrawScreen(void)
 			#endif
 			#endif
 			case KEY_ALT_K:
+#ifdef __EMSCRIPTEN__
+				cpiKeyHelp(KEY_ESC, "Return to file selector");
+#else
 				cpiKeyHelp(KEY_ESC, "Exit");
+#endif
 				cpiKeyHelp(_KEY_ENTER, "Next song");
 				cpiKeyHelp(KEY_INSERT, "Open file selected");
 				cpiKeyHelp('f', "Open file selector");

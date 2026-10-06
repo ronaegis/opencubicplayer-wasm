@@ -420,6 +420,16 @@ static void alsaSetupScan (struct AlsaConfigDeviceList_t *pcm, struct AlsaConfig
 	}
 }
 
+#ifdef OCP_WASM_DIALOG_STEPPER
+/* WASM build: Use non-blocking stepper implementation */
+#include "../wasm/generic-dialog-stepper.h"
+#include "../wasm/alsa-dialog-stepper.c"
+static void alsaSetupRun (void **token, const struct DevInterfaceAPI_t *API)
+{
+	wasm_alsaSetupRun(token, API);
+}
+#else
+/* Native build: Use original blocking implementation */
 static void alsaSetupRun (void **token, const struct DevInterfaceAPI_t *API)
 {
 	enum alsaConfigDraw_Mode_t alsaConfigDraw_Mode = ACDM_AUDIO_DEVICE_SELECTED;
@@ -687,6 +697,7 @@ static void alsaSetupRun (void **token, const struct DevInterfaceAPI_t *API)
 	API->configAPI->SetProfileInt (API->configAPI->SoundSec, "plrbufsize", plrbufsize, 10);
 	API->configAPI->StoreConfig ();
 }
+#endif /* OCP_WASM_DIALOG_STEPPER */
 
 /****************************** devpALSA ******************************/
 

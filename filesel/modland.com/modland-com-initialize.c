@@ -68,6 +68,9 @@ static void modland_com_initialize_Draw (
 	int parsing_invalid,
 	int save,
 	const char *save_message,
+	int save_current,  /* Current number of files saved */
+	int save_total,    /* Total number of files to save */
+	int spinner_counter,  /* For rotating animation */
 	int cancel, int ok
 )
 {
@@ -163,11 +166,21 @@ static void modland_com_initialize_Draw (
 		mlTop++;
 	}
 
+	/* Rotating spinner characters: | / - \ */
+	const char spinner_chars[] = { '|', '/', '-', '\\' };
+	char spinner_char = (save == 1) ? spinner_chars[(spinner_counter / 4) % 4] : (save == 2) ? 'v' : (save == 3) ? 'x' : ' ';
+
 	console->DisplayPrintf (mlTop++, mlLeft, 0x07, mlWidth, " [" "%.*o" "%c" "%.7o" "] Save cache to disk.",
 		save==1 ? /* WHITE */ 15 : save==2 ? /* GREEN */ 10 : /* RED */ 12,
-		save==1 ? '*'            : save==2 ? 'v'            : save==3 ? 'x' : ' ');
+		spinner_char);
 
-	if (save == 3)
+	if (save == 1 && save_total > 0)
+	{
+		int percentage = (save_current * 100) / save_total;
+		char temp[70];
+		snprintf (temp, sizeof (temp), "%d%% (%d of %d file names)", percentage, save_current, save_total);
+		console->DisplayPrintf (mlTop++, mlLeft, 0x02, mlWidth, "     %67s", temp);
+	} else if (save == 3)
 	{
 		console->DisplayPrintf (mlTop++, mlLeft, 0x02, mlWidth, "     %67s", save_message);
 	} else {
@@ -189,17 +202,19 @@ static void modland_com_initialize_Draw (
 
 static void modland_com_initialize_Draw_Until_Enter_Or_Exit (
 	const struct DevInterfaceAPI_t *API,
-	int download, /* 1 = in process, 2 = OK, 3 = Failed, see message */
+	int download,
 	const char *download_message,
 	int download_size,
 	int year, int month, int day,
-	int parsing, /* 1 = in process, 2 = OK, 3 = Failed, see message */
+	int parsing,
 	const char *parsing_message,
 	int parsing_files,
 	int parsing_directories,
 	int parsing_invalid,
 	int save,
-	const char *save_message
+	const char *save_message,
+	int save_current,
+	int save_total
 )
 {
 	while (1)
@@ -208,7 +223,7 @@ static void modland_com_initialize_Draw_Until_Enter_Or_Exit (
 		API->fsDraw();
 		modland_com_initialize_Draw (API->console, download, download_message, download_size, year, month, day,
 		                                           parsing, parsing_message, parsing_files, parsing_directories, parsing_invalid,
-		                                           save, save_message,
+		                                           save, save_message, save_current, save_total, 0,
 		                                           0, 2);
 		while (API->console->KeyboardHit())
 		{
@@ -252,7 +267,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 		{
 			modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 3, "malloc() URL failed", 0, 0, 0, 0,
 			                                                 0, 0, 0, 0, 0,
-			                                                 0, 0);
+			                                                 0, 0, 0, 0);
 			return;
 		}
 		snprintf (url, len, "%sallmods.zip", modland_com.mirror ? modland_com.mirror : "");
@@ -263,12 +278,13 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 	{
 		modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 3, "Failed to create process", 0, 0, 0, 0,
 		                                                 0, 0, 0, 0, 0,
-		                                                 0, 0);
+		                                                 0, 0, 0, 0);
 		return;
 	}
 
 	/* wait for request to finish */
 
+	int spinner_counter = 0;
 	while (1)
 	{
 		API->console->FrameLock();
@@ -279,7 +295,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 		API->fsDraw();
 		modland_com_initialize_Draw (API->console, 1, 0, download_allmods_zip->ContentLength, 0, 0, 0, /* pre-liminary size is available */
 		                                           0, 0, 0, 0, 0,
-		                                           0, 0,
+		                                           0, 0, 0, 0, spinner_counter++,
 		                                           2, 0);
 		while (API->console->KeyboardHit())
 		{
@@ -303,7 +319,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 	{
 		modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 3, download_allmods_zip->errmsg, 0, 0, 0, 0,
 		                                                 0, 0, 0, 0, 0,
-		                                                 0, 0);
+		                                                 0, 0, 0, 0);
 		download_request_free (download_allmods_zip);
 		download_allmods_zip = 0;
 		return;
@@ -315,7 +331,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 	{
 		modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 2, 0, download_allmods_zip->ContentLength, download_allmods_zip->Year, download_allmods_zip->Month, download_allmods_zip->Day,
 		                                                 3, "Unable to open the .ZIP file", 0, 0, 0,
-		                                                 0, 0);
+		                                                 0, 0, 0, 0);
 		download_request_free (download_allmods_zip);
 		download_allmods_zip = 0;
 		return;
@@ -331,7 +347,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 	{
 		modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 2, 0, download_allmods_zip->ContentLength, download_allmods_zip->Year, download_allmods_zip->Month, download_allmods_zip->Day,
 		                                                 3, "File is not a valid .ZIP file", 0, 0, 0,
-		                                                 0, 0);
+		                                                 0, 0, 0, 0);
 		download_request_free (download_allmods_zip);
 		download_allmods_zip = 0;
 		return;
@@ -348,7 +364,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 	{
 		modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 2, 0, download_allmods_zip->ContentLength, download_allmods_zip->Year, download_allmods_zip->Month, download_allmods_zip->Day,
 		                                                 3, "Failed to locate allmods.txt inside allmods.zip", 0, 0, 0,
-		                                                 0, 0);
+		                                                 0, 0, 0, 0);
 		download_request_free (download_allmods_zip);
 		download_allmods_zip = 0;
 		return;
@@ -363,7 +379,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 	{
 		modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 2, 0, download_allmods_zip->ContentLength, download_allmods_zip->Year, download_allmods_zip->Month, download_allmods_zip->Day,
 		                                                 3, "Failed to open allmods.txt inside allmods.zip", 0, 0, 0,
-		                                                 0, 0);
+		                                                 0, 0, 0, 0);
 		download_request_free (download_allmods_zip);
 		download_allmods_zip = 0;
 		return;
@@ -383,7 +399,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 	{
 		modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 2, 0, download_allmods_zip->ContentLength, download_allmods_zip->Year, download_allmods_zip->Month, download_allmods_zip->Day,
 		                                                 3, "Failed to open allmods.txt inside allmods.zip as textfile", 0, 0, 0,
-		                                                 0, 0);
+		                                                 0, 0, 0, 0);
 		download_request_free (download_allmods_zip);
 		download_allmods_zip = 0;
 		return;
@@ -437,7 +453,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 
 					modland_com_initialize_Draw (API->console, 2, 0, download_allmods_zip->ContentLength, download_allmods_zip->Year, download_allmods_zip->Month, download_allmods_zip->Day,
 					                                           1, 0, modland_com.database.fileentries_n, modland_com.database.direntries_n, s.invalid_entries,
-					                                           0, 0,
+					                                           0, 0, 0, 0, 0,
 					                                           2, 0);
 					while (API->console->KeyboardHit())
 					{
@@ -475,7 +491,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 	{
 		modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 2, 0, download_allmods_zip->ContentLength, download_allmods_zip->Year, download_allmods_zip->Month, download_allmods_zip->Day,
 		                                                 2, 0, 0, 0, 0,
-		                                                 3, "Out of memory");
+		                                                 3, "Out of memory", 0, 0);
 		modland_com_database_clear ();
 
 		download_request_free (download_allmods_zip);
@@ -501,6 +517,7 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 			modland_com_initialize_Draw (API->console, 2, 0, download_allmods_zip->ContentLength, download_allmods_zip->Year, download_allmods_zip->Month, download_allmods_zip->Day,
 			                                           1, 0, modland_com.database.fileentries_n, modland_com.database.direntries_n, s.invalid_entries,
 			                                           save_complete + 1, save_message,
+			                                           modland_com_filedb_save_f + 1, modland_com.database.fileentries_n, spinner_counter++,
 			                                           2, 0);
 			while (API->console->KeyboardHit())
 			{
@@ -538,7 +555,12 @@ static void modland_com_initialize_Run (void **token, const struct DevInterfaceA
 
 	modland_com_initialize_Draw_Until_Enter_Or_Exit (API, 2, 0, download_allmods_zip->ContentLength, download_allmods_zip->Year, download_allmods_zip->Month, download_allmods_zip->Day,
 	                                                 2, 0, modland_com.database.fileentries_n, modland_com.database.direntries_n, s.invalid_entries,
-	                                                 save_complete + 1, save_message);
+	                                                 save_complete + 1, save_message,
+	                                                 modland_com.database.fileentries_n, modland_com.database.fileentries_n);
 	download_request_free (download_allmods_zip);
 	download_allmods_zip = 0;
 }
+
+#ifdef OCP_WASM_FILESEL_STEPPER
+#include "wasm-stepper/modland-com-initialize-stepper.inc.c"
+#endif

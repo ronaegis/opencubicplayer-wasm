@@ -1643,6 +1643,14 @@ static int timidityConfigRunBrowseSF2 (const struct DevInterfaceAPI_t *API)
 	}
 }
 
+#ifdef OCP_WASM_DIALOG_STEPPER
+#include "../wasm/generic-dialog-stepper.h"
+#include "../wasm/timidity-dialog-stepper.c"
+static void timidityConfigRun (void **token, const struct DevInterfaceAPI_t *API)
+{
+	wasm_timidityConfigRun(token, API);
+}
+#else
 static void timidityConfigRun (void **token, const struct DevInterfaceAPI_t *API)
 {
 	int esel = 0;
@@ -1996,6 +2004,7 @@ superexit:
 	API->configAPI->SetProfileInt ("timidity", "chorusenabled",  DefaultChorus,         10);
 	API->configAPI->StoreConfig ();
 }
+#endif /* OCP_WASM_DIALOG_STEPPER */
 
 static struct ocpfile_t *timidityconfig; // needs to overlay an dialog above filebrowser, and after that the file is "finished"   Special case of DEVv
 static void timidityConfigRun (void **token, const struct DevInterfaceAPI_t *API);

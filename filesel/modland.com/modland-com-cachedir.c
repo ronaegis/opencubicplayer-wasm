@@ -220,6 +220,10 @@ static char *modland_com_resolve_cachedir (const struct configAPI_t *configAPI, 
 	           (!strncmp (src, "$OCPDATAHOME/", 13)))
 	{
 		return modland_com_resolve_cachedir2 (configAPI->DataHomePath, src+13);
+	} else if ((!strncmp (src, "$OCPHOMEDATA\\", 13)) ||
+	           (!strncmp (src, "$OCPHOMEDATA/", 13)))
+	{
+		return modland_com_resolve_cachedir2 (configAPI->DataHomePath, src+13);
 	} else if ((!strncmp (src, "$OCPDATA\\", 9)) ||
 	           (!strncmp (src, "$OCPDATA/", 9)))
 	{
@@ -397,3 +401,7 @@ free_return:
 	free (temp_modland_com);
 	free (custom_modland_com);
 }
+
+#ifdef OCP_WASM_FILESEL_STEPPER
+#include "wasm-stepper/modland-com-cachedir-stepper.inc.c"
+#endif

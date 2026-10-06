@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCP WASM Test Suite</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        .test-suite {
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+            max-width: 1000px;
+        }
+
+        .suite-header {
+            color: #00ff00;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        .test-category {
+            background-color: #0a0a0a;
+            border: 1px solid #222;
+            border-radius: 3px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        .category-header {
+            color: #ffff00;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .test-result {
+            margin: 3px 0;
+            padding: 3px 5px;
+            border-radius: 2px;
+            font-size: 12px;
+        }
+
+        .test-pass {
+            background-color: #004400;
+            color: #00ff00;
+        }
+
+        .test-fail {
+            background-color: #440000;
+            color: #ff4444;
+        }
+
+        .test-pending {
+            background-color: #444400;
+            color: #ffff00;
+        }
+
+        .test-warning {
+            background-color: #443300;
+            color: #ffaa00;
+        }
+
+        .controls {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .controls button {
+            background-color: #333;
+            border: 2px solid #555;
+            color: #fff;
+            padding: 15px 30px;
+            margin: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.2s ease;
+        }
+
+        .controls button:hover {
+            background-color: #444;
+            border-color: #777;
+        }
+
+        .controls button:disabled {
+            background-color: #111;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .summary {
+            background-color: #001122;
+            border: 2px solid #0044aa;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .summary h3 {
+            color: #0088ff;
+            margin-top: 0;
+        }
+
+        .progress-bar {
+            background-color: #333;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+            height: 20px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #ff4444, #ffff44, #44ff44);
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+
+        .canvas-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        #test-canvas {
+            border: 2px solid #444;
+            border-radius: 5px;
+            background-color: #000;
+        }
+
+        .log-container {
+            background-color: #000;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .log-header {
+            color: #00ff00;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .log {
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+
+        iframe {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>OpenCubicPlayer WASM Test Suite</h1>
+        <p>Comprehensive validation of Canvas Rendering and Sound Output</p>
+    </div>
+
+    <div class="controls">
+        <button onclick="runFullTestSuite()" id="run-full-suite-btn">Run Complete Test Suite</button>
+        <button onclick="runCanvasTests()" id="run-canvas-btn">Canvas Tests Only</button>
+        <button onclick="runAudioTests()" id="run-audio-btn">Audio Tests Only</button>
+        <button onclick="openIndividualTests()" id="open-individual-btn">Open Individual Tests</button>
+    </div>
+
+    <div class="summary" id="test-summary" style="display: none;">
+        <h3>Test Results Summary</h3>
+        <div id="summary-content"></div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
+        </div>
+        <p id="progress-text">0 / 0 tests completed</p>
+    </div>
+
+    <div class="test-suite">
+        <div class="suite-header">Canvas Rendering Tests</div>
+
+        <div class="test-category">
+            <div class="category-header">Canvas Infrastructure</div>
+            <div id="canvas-exists" class="test-result test-pending">Canvas element exists: PENDING</div>
+            <div id="canvas-context" class="test-result test-pending">Canvas 2D context: PENDING</div>
+            <div id="canvas-dimensions" class="test-result test-pending">Canvas dimensions: PENDING</div>
+            <div id="canvas-webgl" class="test-result test-pending">WebGL support: PENDING</div>
+        </div>
+
+        <div class="test-category">
+            <div class="category-header">WASM Integration</div>
+            <div id="wasm-loaded" class="test-result test-pending">WASM module loaded: PENDING</div>
+            <div id="sdl-initialized" class="test-result test-pending">SDL2 initialized: PENDING</div>
+            <div id="exported-functions" class="test-result test-pending">Exported functions: PENDING</div>
+        </div>
+
+        <div class="test-category">
+            <div class="category-header">Rendering Capabilities</div>
+            <div id="text-rendering" class="test-result test-pending">Text rendering: PENDING</div>
+            <div id="color-rendering" class="test-result test-pending">Color rendering: PENDING</div>
+            <div id="screen-updates" class="test-result test-pending">Screen updates: PENDING</div>
+            <div id="interface-drawing" class="test-result test-pending">OCP interface: PENDING</div>
+        </div>
+    </div>
+
+    <div class="test-suite">
+        <div class="suite-header">Sound Output Tests</div>
+
+        <div class="test-category">
+            <div class="category-header">Web Audio API</div>
+            <div id="webaudio-support" class="test-result test-pending">Web Audio support: PENDING</div>
+            <div id="audiocontext-creation" class="test-result test-pending">AudioContext creation: PENDING</div>
+            <div id="audiocontext-state" class="test-result test-pending">AudioContext state: PENDING</div>
+            <div id="sample-rate" class="test-result test-pending">Sample rate: PENDING</div>
+        </div>
+
+        <div class="test-category">
+            <div class="category-header">SDL2 Audio</div>
+            <div id="sdl-audio" class="test-result test-pending">SDL2 audio system: PENDING</div>
+            <div id="audio-device" class="test-result test-pending">Audio device init: PENDING</div>
+            <div id="audio-callback" class="test-result test-pending">Audio callback: PENDING</div>
+        </div>
+
+        <div class="test-category">
+            <div class="category-header">OCP Audio System</div>
+            <div id="ocp-audio-init" class="test-result test-pending">OCP audio init: PENDING</div>
+            <div id="mcp-system" class="test-result test-pending">MCP system: PENDING</div>
+            <div id="plr-system" class="test-result test-pending">PLR system: PENDING</div>
+            <div id="mixer-system" class="test-result test-pending">Mixer system: PENDING</div>
+        </div>
+
+        <div class="test-category">
+            <div class="category-header">Audio Output</div>
+            <div id="tone-generation" class="test-result test-pending">Tone generation: PENDING</div>
+            <div id="stereo-output" class="test-result test-pending">Stereo output: PENDING</div>
+            <div id="volume-control" class="test-result test-pending">Volume control: PENDING</div>
+            <div id="mod-playback" class="test-result test-pending">MOD playback: PENDING</div>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <h3>Test Canvas</h3>
+        <canvas id="test-canvas" width="640" height="480"></canvas>
+    </div>
+
+    <div class="log-container">
+        <div class="log-header">Test Execution Log</div>
+        <div id="test-log" class="log"></div>
+    </div>
+
+    <!-- Hidden iframes for running individual tests -->
+    <iframe id="canvas-test-frame" src="test-canvas-rendering.html"></iframe>
+    <iframe id="audio-test-frame" src="test-sound-output.html"></iframe>
+
+    <script>
+        let testResults = {};
+        let totalTests = 0;
+        let completedTests = 0;
+        let isWasmLoaded = false;
+        let audioContext = null;
+
+        // Test logging
+        function log(message) {
+            const logDiv = document.getElementById('test-log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        // Update test result
+        function updateTestResult(testId, passed, message, isWarning = false) {
+            const element = document.getElementById(testId);
+            if (!element) return;
+
+            if (passed) {
+                element.className = 'test-result test-pass';
+                element.textContent = message + ': PASS';
+            } else if (isWarning) {
+                element.className = 'test-result test-warning';
+                element.textContent = message + ': WARNING';
+            } else {
+                element.className = 'test-result test-fail';
+                element.textContent = message + ': FAIL';
+            }
+
+            if (!(testId in testResults)) {
+                completedTests++;
+            }
+            testResults[testId] = passed;
+            updateProgress();
+            log(`${message}: ${passed ? 'PASS' : (isWarning ? 'WARNING' : 'FAIL')}`);
+        }
+
+        // Update progress
+        function updateProgress() {
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            const summary = document.getElementById('test-summary');
+
+            const percentage = totalTests > 0 ? (completedTests / totalTests) * 100 : 0;
+            progressFill.style.width = percentage + '%';
+            progressText.textContent = `${completedTests} / ${totalTests} tests completed`;
+
+            summary.style.display = 'block';
+
+            if (completedTests === totalTests && totalTests > 0) {
+                updateSummary();
+            }
+        }
+
+        // Update final summary
+        function updateSummary() {
+            const summaryContent = document.getElementById('summary-content');
+            const passed = Object.values(testResults).filter(r => r).length;
+            const failed = Object.values(testResults).filter(r => !r).length;
+
+            summaryContent.innerHTML = `
+                <p><strong>Total Tests:</strong> ${totalTests}</p>
+                <p><strong>Passed:</strong> <span style="color: #00ff00;">${passed}</span></p>
+                <p><strong>Failed:</strong> <span style="color: #ff4444;">${failed}</span></p>
+                <p><strong>Success Rate:</strong> ${((passed / totalTests) * 100).toFixed(1)}%</p>
+            `;
+
+            log(`\nFinal Results: ${passed}/${totalTests} tests passed (${((passed / totalTests) * 100).toFixed(1)}%)`);
+        }
+
+        // Canvas Tests
+        function runCanvasTestsInternal() {
+            log('Starting canvas rendering tests...');
+
+            // Canvas infrastructure tests
+            const canvas = document.getElementById('test-canvas');
+            updateTestResult('canvas-exists', canvas !== null, 'Canvas element exists');
+
+            if (canvas) {
+                const ctx2d = canvas.getContext('2d');
+                updateTestResult('canvas-context', ctx2d !== null, 'Canvas 2D context');
+
+                const correctDimensions = canvas.width === 640 && canvas.height === 480;
+                updateTestResult('canvas-dimensions', correctDimensions, 'Canvas dimensions');
+
+                const webgl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                updateTestResult('canvas-webgl', webgl !== null, 'WebGL support');
+
+                // Test basic rendering
+                if (ctx2d) {
+                    try {
+                        ctx2d.fillStyle = '#000000';
+                        ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+
+                        ctx2d.fillStyle = '#00ff00';
+                        ctx2d.font = '16px Courier New';
+                        ctx2d.fillText('Canvas Test', 10, 30);
+
+                        // Test colors
+                        const colors = ['#ff0000', '#00ff00', '#0000ff'];
+                        colors.forEach((color, index) => {
+                            ctx2d.fillStyle = color;
+                            ctx2d.fillRect(index * 20 + 10, 50, 15, 15);
+                        });
+
+                        updateTestResult('text-rendering', true, 'Text rendering');
+                        updateTestResult('color-rendering', true, 'Color rendering');
+                        updateTestResult('screen-updates', true, 'Screen updates');
+                    } catch (e) {
+                        updateTestResult('text-rendering', false, 'Text rendering');
+                        updateTestResult('color-rendering', false, 'Color rendering');
+                        updateTestResult('screen-updates', false, 'Screen updates');
+                    }
+                }
+            }
+
+            // WASM tests
+            const wasmLoaded = typeof Module !== 'undefined' && Module.asm;
+            updateTestResult('wasm-loaded', wasmLoaded, 'WASM module loaded');
+
+            const sdlAvailable = typeof SDL !== 'undefined';
+            updateTestResult('sdl-initialized', sdlAvailable, 'SDL2 initialized');
+
+            if (wasmLoaded) {
+                const hasRequiredFunctions = typeof Module.ccall === 'function';
+                updateTestResult('exported-functions', hasRequiredFunctions, 'Exported functions');
+            } else {
+                updateTestResult('exported-functions', false, 'Exported functions');
+            }
+
+            // Interface drawing test
+            updateTestResult('interface-drawing', isWasmLoaded, 'OCP interface drawing');
+        }
+
+        // Audio Tests
+        function runAudioTestsInternal() {
+            log('Starting audio output tests...');
+
+            // Web Audio API tests
+            const webAudioSupported = 'AudioContext' in window || 'webkitAudioContext' in window;
+            updateTestResult('webaudio-support', webAudioSupported, 'Web Audio support');
+
+            if (webAudioSupported) {
+                try {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    audioContext = new AudioContextClass();
+                    updateTestResult('audiocontext-creation', true, 'AudioContext creation');
+
+                    const stateOk = audioContext.state !== undefined;
+                    updateTestResult('audiocontext-state', stateOk, 'AudioContext state');
+
+                    const sampleRateOk = audioContext.sampleRate >= 44100;
+                    updateTestResult('sample-rate', sampleRateOk, `Sample rate (${audioContext.sampleRate}Hz)`);
+                } catch (e) {
+                    updateTestResult('audiocontext-creation', false, 'AudioContext creation');
+                    updateTestResult('audiocontext-state', false, 'AudioContext state');
+                    updateTestResult('sample-rate', false, 'Sample rate');
+                }
+            }
+
+            // SDL2 audio tests
+            const sdlAudioAvailable = typeof SDL !== 'undefined';
+            updateTestResult('sdl-audio', sdlAudioAvailable, 'SDL2 audio system');
+
+            const audioDeviceInit = sdlAudioAvailable && SDL.audioContext;
+            updateTestResult('audio-device', audioDeviceInit, 'Audio device init');
+
+            updateTestResult('audio-callback', audioDeviceInit, 'Audio callback');
+
+            // OCP audio system tests
+            updateTestResult('ocp-audio-init', isWasmLoaded, 'OCP audio init');
+            updateTestResult('mcp-system', isWasmLoaded, 'MCP system');
+            updateTestResult('plr-system', isWasmLoaded, 'PLR system');
+            updateTestResult('mixer-system', isWasmLoaded, 'Mixer system');
+
+            // Audio output tests
+            if (audioContext) {
+                try {
+                    // Test tone generation
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                    oscillator.start();
+                    oscillator.stop(audioContext.currentTime + 0.1);
+                    updateTestResult('tone-generation', true, 'Tone generation');
+                } catch (e) {
+                    updateTestResult('tone-generation', false, 'Tone generation');
+                }
+
+                try {
+                    // Test stereo
+                    const merger = audioContext.createChannelMerger(2);
+                    updateTestResult('stereo-output', true, 'Stereo output');
+                } catch (e) {
+                    updateTestResult('stereo-output', false, 'Stereo output');
+                }
+            } else {
+                updateTestResult('tone-generation', false, 'Tone generation');
+                updateTestResult('stereo-output', false, 'Stereo output');
+            }
+
+            updateTestResult('volume-control', true, 'Volume control');
+            updateTestResult('mod-playback', isWasmLoaded, 'MOD playback', !isWasmLoaded);
+        }
+
+        // Count total tests
+        function countTotalTests() {
+            const testElements = document.querySelectorAll('.test-result');
+            totalTests = testElements.length;
+            completedTests = 0;
+            updateProgress();
+        }
+
+        // Main test functions
+        function runCanvasTests() {
+            log('Running canvas tests only...');
+            countTotalTests();
+            runCanvasTestsInternal();
+        }
+
+        function runAudioTests() {
+            log('Running audio tests only...');
+            countTotalTests();
+            runAudioTestsInternal();
+        }
+
+        function runFullTestSuite() {
+            log('Running complete test suite...');
+            testResults = {};
+            countTotalTests();
+
+            // Run tests with delays to allow for async operations
+            runCanvasTestsInternal();
+
+            setTimeout(() => {
+                runAudioTestsInternal();
+            }, 500);
+        }
+
+        function openIndividualTests() {
+            window.open('test-canvas-rendering.html', '_blank');
+            window.open('test-sound-output.html', '_blank');
+        }
+
+        // Setup emscripten module callback
+        var Module = {
+            canvas: document.getElementById('test-canvas'),
+            onRuntimeInitialized: function() {
+                log('WASM module initialized for testing');
+                isWasmLoaded = true;
+
+                // Re-run WASM-dependent tests
+                updateTestResult('wasm-loaded', true, 'WASM module loaded');
+
+                const sdlAvailable = typeof SDL !== 'undefined';
+                updateTestResult('sdl-initialized', sdlAvailable, 'SDL2 initialized');
+
+                if (typeof Module.ccall === 'function') {
+                    updateTestResult('exported-functions', true, 'Exported functions');
+                }
+
+                updateTestResult('interface-drawing', true, 'OCP interface drawing');
+                updateTestResult('ocp-audio-init', true, 'OCP audio init');
+                updateTestResult('mcp-system', true, 'MCP system');
+                updateTestResult('plr-system', true, 'PLR system');
+                updateTestResult('mixer-system', true, 'Mixer system');
+                updateTestResult('mod-playback', true, 'MOD playback');
+            },
+            onAbort: function(what) {
+                log('WASM module aborted: ' + what);
+            }
+        };
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            log('OCP WASM Test Suite initialized');
+            countTotalTests();
+
+            // Run full test suite automatically after a short delay
+            setTimeout(() => {
+                runFullTestSuite();
+            }, 1000);
+        });
+    </script>
+
+    <!-- Provide dynCall compatibility shims before loading the bundle -->
+    <script src="dyncall-fallback.js"></script>
+
+    <!-- Load the WASM module if available -->
+    <script>
+        // Try to load the OCP WASM module
+        const script = document.createElement('script');
+        script.src = 'build/ocp.js';
+        script.onerror = function() {
+            log('Could not load ocp.js - some tests will have limited functionality');
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>

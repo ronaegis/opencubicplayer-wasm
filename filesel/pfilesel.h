@@ -12,6 +12,7 @@ extern int fsGetNextFile (struct moduleinfostruct *info, struct ocpfilehandle_t 
 extern int fsGetPrevFile (struct moduleinfostruct *info, struct ocpfilehandle_t **filehandle); /* info comes from external buffer */
 extern int fsFilesLeft(void);
 extern signed int fsFileSelect(void);
+extern void fsRescanCurrentDir(void);
 /* extern char fsAddFiles(const char *);      use the playlist instead..*/
 extern int fsPreInit (const struct configAPI_t *configAPI);
 extern int fsInit(void);
@@ -98,5 +99,50 @@ struct modlist;
 struct ocpdir_t;
 extern int fsReadDir(struct modlist *ml, struct ocpdir_t *dir, const char *mask, unsigned long opt);
 extern void fsForceRemove(const uint32_t dirdbref);
+
+/* Stepper-based file selector API for non-blocking event loops (WASM)
+ *
+ * The stepper API allows the file selector to run incrementally, yielding
+ * control back to the event loop after each iteration. This enables the
+ * browser to remain responsive during file selection.
+ *
+ * Usage:
+ *   struct fs_file_select_engine engine;
+ *   fsFileSelectStepperReset(&engine);
+ *
+ *   while (1) {
+ *       int result = fsFileSelectStepperRun(&engine, 1);
+ *       if (result != FS_FILESELECT_RESULT_IN_PROGRESS) {
+ *           // Done: result is 1 (selected), 0 (cancelled), or -1 (error)
+ *           break;
+ *       }
+ *       // Yield to event loop
+ *   }
+ *
+ * Return values from fsFileSelectStepperRun():
+ *   FS_FILESELECT_RESULT_IN_PROGRESS (2) - Still running, call again
+ *   1  - File selected, retrieve with fsGetNextFile()
+ *   0  - User cancelled
+ *   -1 - Error occurred
+ */
+#ifdef OCP_WASM_FILESEL_STEPPER
+
+struct fs_file_select_engine;
+
+#define FS_FILESELECT_RESULT_IN_PROGRESS 2
+
+/* Reset the stepper engine to initial state */
+extern void fsFileSelectStepperReset(struct fs_file_select_engine *engine);
+
+/* Check if the stepper engine is currently active */
+extern int fsFileSelectStepperIsActive(const struct fs_file_select_engine *engine);
+
+/* Run the file selector for up to iteration_limit iterations
+ * Pass iteration_limit=1 for single-step operation from browser main loop
+ * Pass iteration_limit=-1 for unlimited iterations (blocking mode)
+ */
+extern signed int fsFileSelectStepperRun(struct fs_file_select_engine *engine, int iteration_limit);
+
+#endif /* OCP_WASM_FILESEL_STEPPER */
 
 #endif

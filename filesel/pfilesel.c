@@ -910,6 +910,33 @@ static short editmode=0;
 static unsigned int scanposf, scanposp;
 static int win = 0;
 
+#ifndef FS_FILESELECT_RESULT_IN_PROGRESS
+#define FS_FILESELECT_RESULT_IN_PROGRESS 2
+#endif
+
+struct fs_file_select_engine {
+	int is_active;   /* Engine is currently running */
+	int first_run;   /* First iteration flag */
+};
+
+static void fs_file_select_engine_reset(struct fs_file_select_engine *engine)
+{
+	if (!engine)
+	{
+		return;
+	}
+	engine->is_active = 0;
+	engine->first_run = 0;
+}
+
+static signed int fs_file_select_engine_finish(struct fs_file_select_engine *engine, signed int value)
+{
+	fs_file_select_engine_reset(engine);
+	quickfind[0] = 0;
+	quickfindlen = 0;
+	return value;
+}
+
 int fsListScramble=1;
 int fsListRemove=1;
 int fsLoopMods=1;
@@ -1017,6 +1044,13 @@ static char fsScanDir (int op)
 	}
 
 	return 1;
+}
+
+void fsRescanCurrentDir(void)
+{
+	if (!currentdir || !dmCurDrive || !dmCurDrive->cwd)
+		return;
+	fsScanDir(1);
 }
 
 int fsGetPrevFile (struct moduleinfostruct *info, struct ocpfilehandle_t **filehandle)
@@ -2373,6 +2407,7 @@ static void fsShowDir(unsigned int firstv, unsigned int selectv, unsigned int fi
 	}
 }
 
+#ifndef OCP_WASM_FILESEL_STEPPER
 static void fsEditRegisterExt(void)
 {
 	char ExtToInsert[MAX_MODEXT_LENGTH + 1];
@@ -2942,6 +2977,7 @@ superbreak:
 		}
 	}
 }
+#endif /* OCP_WASM_FILESEL_STEPPER */
 
 static struct moduleinfostruct mdbEditBuf;
 
@@ -3834,38 +3870,58 @@ static void fsDraw(void)
 	/* we do not paint any of the edits from the fsFileSelect() state */
 }
 
-signed int fsFileSelect(void)
+static signed int fs_file_select_impl(struct fs_file_select_engine *engine, int iteration_limit)
 {
-	int state = 0;
-	/* state = 0 - Idle
-	 * state = 1 - fsEditFileInfo()
-	 * state = 2 - cpiKeyHelpDisplay()
-	 * state = 3 - fsEditViewPath()
-	 * state = 4 - fsSavePlayList()
-	 * state = 5 - fsEditDirInfo()
-	 */
+	int state;
+	int first_call;
 	unsigned long i;
+	int loop_limit = (iteration_limit > 0) ? iteration_limit : -1;
 
-	if (!currentdir->num)
-	{ /* this is true the very first time we execute */
-		fsScanDir(0);
-	} else if (fsFileSelect_ForceRescan)
+	if (engine)
 	{
-		fsScanDir(1);
+		if (!engine->is_active)
+		{
+			engine->is_active = 1;
+			engine->first_run = 1;
+		}
+		state = 0;
+		first_call = engine->first_run;
+	} else {
+		state = 0;
+		first_call = 1;
 	}
 
-	plSetTextMode(plScrType);
-
-	isnextplay=NextPlayNone;
-
-	quickfind[0] = 0;
-	quickfindlen = 0;
-
-	if (fsPlaylistOnly)
-		return 0;
-
-	while (1)
+	if (first_call)
 	{
+		/* state = 0 - Idle
+		 * state = 1 - fsEditFileInfo()
+		 * state = 2 - cpiKeyHelpDisplay()
+		 * state = 3 - fsEditViewPath()
+		 * state = 4 - fsSavePlayList()
+		 * state = 5 - fsEditDirInfo()
+		 */
+		if (!currentdir->num)
+		{ /* this is true the very first time we execute */
+			fsScanDir(0);
+		} else if (fsFileSelect_ForceRescan)
+		{
+			fsScanDir(1);
+		}
+		plSetTextMode(plScrType);
+		isnextplay=NextPlayNone;
+		quickfind[0] = 0;
+		quickfindlen = 0;
+		if (fsPlaylistOnly)
+			return fs_file_select_engine_finish(engine, 0);
+		if (engine)
+		{
+			engine->first_run = 0;
+		}
+	}
+
+	for (int fs_iter = 0; (loop_limit < 0) || (fs_iter < loop_limit); fs_iter++)
+	{
+
 		signed int firstv, firstp;
 		uint16_t c;
 		struct modlistentry *m;
@@ -3920,7 +3976,7 @@ superbreak:
 				goto superbreak;
 			} else if (retval < 0)
 			{
-				return -1;
+				return fs_file_select_engine_finish(engine, -1);
 			}
 			state = 0;
 		} else if (state == 2)
@@ -3959,7 +4015,7 @@ superbreak:
 				goto superbreak;
 			} else if (retval < 0)
 			{
-				return -1;
+				return fs_file_select_engine_finish(engine, -1);
 			}
 			state = 0;
 		}
@@ -4086,7 +4142,9 @@ superbreak:
 			{
 				case KEY_ALT_K:
 					cpiKeyHelpClear();
+#ifndef __EMSCRIPTEN__
 					cpiKeyHelp(KEY_ESC, "Exit");
+#endif
 					cpiKeyHelp(KEY_CTRL_BS, "Stop filescanning");
 					cpiKeyHelp(KEY_ALT_S, "Stop filescanning");
 					cpiKeyHelp(KEY_TAB, "Toggle between filelist and playlist");
@@ -4130,15 +4188,20 @@ superbreak:
 					goto superbreak;
 				case KEY_EXIT:
 				case KEY_ESC:
-					return 0;
+#ifdef __EMSCRIPTEN__
+					/* WASM: Don't allow quitting file selector - ignore ESC/EXIT */
+					break;
+#else
+					return fs_file_select_engine_finish(engine, 0);
+#endif
 				case KEY_ALT_R:
 					if ((m->file)&&(m->flags & MODLIST_FLAG_ISMOD))
 					{
 						if (!mdbGetModuleInfo(&mdbEditBuf, m->mdb_ref))
-							return -1;
+							return fs_file_select_engine_finish(engine, -1);
 						mdbEditBuf.modtype.integer.i = mtUnRead;
 						if (!mdbWriteModuleInfo(m->mdb_ref, &mdbEditBuf))
-							return -1;
+							return fs_file_select_engine_finish(engine, -1);
 						mdbScan(m->file, m->mdb_ref, 0);
 						m->flags |= MODLIST_FLAG_SCANNED;
 					}
@@ -4162,9 +4225,14 @@ superbreak:
 					break;
 				case KEY_ALT_C:
 					fsSetup();
+#ifndef OCP_WASM_FILESEL_STEPPER
 					plSetTextMode(plScrType);
 					fsScanDir(0);
 					goto superbreak;
+#else
+					/* In stepper mode, return immediately to let wrapper drive setup stepper */
+					return FS_FILESELECT_RESULT_IN_PROGRESS;
+#endif
 				case KEY_ALT_P:
 					if (editmode)
 						break;
@@ -4172,7 +4240,7 @@ superbreak:
 					goto superbreak;
 				case KEY_F(1):
 					if (!fsHelp2())
-						return -1;
+						return fs_file_select_engine_finish(engine, -1);
 					plSetTextMode(plScrType);
 					break;
 				case KEY_ALT_Z:
@@ -4218,7 +4286,7 @@ superbreak:
 						if (!playlist->num)
 							break;
 						isnextplay=NextPlayPlaylist;
-						return 1;
+						return fs_file_select_engine_finish(engine, 1);
 					} else {
 						if (m->dir)
 						{
@@ -4250,7 +4318,7 @@ superbreak:
 						{
 							nextplay=m;
 							isnextplay=NextPlayBrowser;
-							return 1;
+							return fs_file_select_engine_finish(engine, 1);
 						}
 					}
 					break;
@@ -4424,7 +4492,7 @@ superbreak:
 						{
 							if (!(fsReadDir (playlist, m->dir, curmask, RD_PUTRSUBS | RD_ISMODONLY | RD_SUBSORT)))
 							{
-								return -1;
+								return fs_file_select_engine_finish(engine, -1);
 							}
 						} else if (m->file)
 						{
@@ -4482,7 +4550,7 @@ superbreak:
 							int f;
 							if (!(fsReadDir (tl, m->dir, curmask, RD_PUTRSUBS)))
 							{
-								return -1;
+								return fs_file_select_engine_finish(engine, -1);
 							}
 							for (i=0;i<tl->num;i++)
 							{
@@ -4601,9 +4669,39 @@ superbreak:
       break;*/
 			}
 		}
+	
 	}
-  /*return 0; the above while loop doesn't go to this point */
+
+	if (engine)
+	{
+		return FS_FILESELECT_RESULT_IN_PROGRESS;
+	}
+
+	return fs_file_select_engine_finish(engine, 0); /* unreachable */
 }
+
+signed int fsFileSelect(void)
+{
+	return fs_file_select_impl(NULL, -1);
+}
+
+#ifdef OCP_WASM_FILESEL_STEPPER
+void fsFileSelectStepperReset(struct fs_file_select_engine *engine)
+{
+	fs_file_select_engine_reset(engine);
+}
+
+int fsFileSelectStepperIsActive(const struct fs_file_select_engine *engine)
+{
+	return engine && engine->is_active;
+}
+
+signed int fsFileSelectStepperRun(struct fs_file_select_engine *engine, int iteration_limit)
+{
+	return fs_file_select_impl(engine, iteration_limit);
+}
+#endif
+
 
 #warning we can add a dir->SaveFile API.....
 static int fsSavePlayList(const struct modlist *ml)

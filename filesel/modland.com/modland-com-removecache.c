@@ -275,6 +275,11 @@ removefilescomplete:
 	}
 }
 
+#ifdef OCP_WASM_FILESEL_STEPPER
+#include "wasm-stepper/modland-com-removecache-stepper.inc.c"
+#endif
+
+
 /* calculate */
 static void modland_com_wipecache_Run (const struct DevInterfaceAPI_t *API)
 {

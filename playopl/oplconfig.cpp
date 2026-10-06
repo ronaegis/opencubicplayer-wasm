@@ -1256,6 +1256,16 @@ static int oplRetroConfigRun (const struct DevInterfaceAPI_t *API)
 	return 1;
 }
 
+#ifdef OCP_WASM_DIALOG_STEPPER
+extern "C" {
+#include "../wasm/generic-dialog-stepper.h"
+}
+#include "../wasm/opl-dialog-stepper.cpp"
+static void oplConfigRun (void **token, const struct DevInterfaceAPI_t *API)
+{
+	wasm_oplConfigRun(token, API);
+}
+#else
 static void oplConfigRun (void **token, const struct DevInterfaceAPI_t *API)
 {
 	int inRetroConfig = 0;
@@ -1338,6 +1348,7 @@ superexit:
 	else                API->configAPI->SetProfileString ("adplug", "emulator", "woody");
 	API->configAPI->StoreConfig ();
 }
+#endif /* OCP_WASM_DIALOG_STEPPER */
 
 static struct ocpfile_t *oplconfig;
 static void oplConfigRun (void **token, const struct DevInterfaceAPI_t *API);

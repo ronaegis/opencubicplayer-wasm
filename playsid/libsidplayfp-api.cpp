@@ -40,7 +40,12 @@ extern "C"
 #undef PACKAGE_VERSION
 #endif
 
+#if defined(WASM_BUILD)
+#include "../wasm/config.h"
+#include "../wasm/sidplayfp-config/reapply.h"
+#else
 #include "../config.h"
+#endif
 #include <stdio.h>
 #include <unistd.h>
 #include "types.h"

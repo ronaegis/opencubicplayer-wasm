@@ -534,6 +534,18 @@ static void devp_save_devices (const struct DevInterfaceAPI_t *API)
 	free (tmp);
 }
 
+#ifdef OCP_WASM_DIALOG_STEPPER
+/* Browser build: the registered callback yields after one frame.
+ * The stepper drives the driver list. The buffer-size menu stays on
+ * the native path below. */
+#include "../wasm/generic-dialog-stepper.h"
+#include "../wasm/devp-dialog-stepper.c"
+static void setup_devp_run (void **token, const struct DevInterfaceAPI_t *API)
+{
+	wasm_setup_devp_run(token, API);
+}
+#else
+/* Native build: driver list, entered from the playback menu. */
 static void setup_devp_run_driver (void **token, const struct DevInterfaceAPI_t *API)
 {
 	int dsel = 0;
@@ -656,6 +668,7 @@ static void setup_devp_run_driver (void **token, const struct DevInterfaceAPI_t 
 		API->console->FrameLock();
 	}
 }
+#endif /* OCP_WASM_DIALOG_STEPPER */
 
 static void DrawDelayBar (const struct DevInterfaceAPI_t *API, const int left, const int lineno, const int width, int value, const int active)
 {
@@ -730,6 +743,7 @@ static void setup_devp_draw_main (const struct DevInterfaceAPI_t *API, const cha
 }
 
 
+#ifndef OCP_WASM_DIALOG_STEPPER
 static void setup_devp_run (void **token, const struct DevInterfaceAPI_t *API)
 {
 	int repeat = 1;
@@ -821,6 +835,7 @@ static void setup_devp_run (void **token, const struct DevInterfaceAPI_t *API)
 		API->console->FrameLock();
 	}
 }
+#endif /* OCP_WASM_DIALOG_STEPPER */
 
 DLLEXTINFO_CORE_PREFIX struct linkinfostruct dllextinfo =
 {

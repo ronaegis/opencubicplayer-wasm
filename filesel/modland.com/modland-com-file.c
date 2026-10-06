@@ -19,6 +19,10 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#ifdef WASM_BUILD
+int wasm_sync_download_to_file(const char *url, const char *dest_path);
+#endif
+
 struct modland_com_ocpfile_t
 {
 	struct ocpfile_t head;
@@ -215,6 +219,17 @@ static int curl_download_magic (const char *targetfilename, const char *sourcepa
 	free (escaped);
 	escaped = 0;
 
+#ifdef WASM_BUILD
+	{
+		int rc = wasm_sync_download_to_file (url, targetfilename);
+		free (url);
+		if (rc)
+		{
+			return -1;
+		}
+		return 0;
+	}
+#else
 	request = download_request_spawn (&configAPI, 0, url);
 	free (url);
 	if (!request)
@@ -256,6 +271,7 @@ static int curl_download_magic (const char *targetfilename, const char *sourcepa
 	temp_filehandle->unref (temp_filehandle);
 
 	return 0;
+#endif
 }
 
 static struct ocpfilehandle_t *modland_com_ocpfile_open (struct ocpfile_t *_f)

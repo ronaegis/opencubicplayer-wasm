@@ -66,3 +66,6 @@ playtimidity/dumpmidi
 playxm/dumpmod
 stuff/compat-test
 stuff/pfonts-update
+.DS_Store
+**/.claude/
+node_modules/

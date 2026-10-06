@@ -29,7 +29,12 @@
 
 extern "C"
 {
+#if defined(WASM_BUILD)
+#include "../wasm/config.h"
+#include "../wasm/sidplayfp-config/reapply.h"
+#else
 #include "../config.h"
+#endif
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>

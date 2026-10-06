@@ -1081,6 +1081,14 @@ static void refresh_dir (uint32_t ref, uint32_t old, int *esel, const struct Dev
 	}
 }
 
+#ifdef OCP_WASM_DIALOG_STEPPER
+#include "../wasm/generic-dialog-stepper.h"
+#include "../wasm/sid-dialog-stepper.c"
+static void sidConfigRun (void **token, const struct DevInterfaceAPI_t *API)
+{
+	wasm_sidConfigRun(token, API);
+}
+#else
 static void sidConfigRun (void **token, const struct DevInterfaceAPI_t *API)
 {
 	int esel = 0;
@@ -1506,6 +1514,7 @@ superexit:
 	API->dirdb->Unref (entry_basic.dirdb_ref, dirdb_use_file);
 	API->dirdb->Unref (entry_chargen.dirdb_ref, dirdb_use_file);
 }
+#endif /* OCP_WASM_DIALOG_STEPPER */
 
 static struct ocpfile_t *sidconfig; // needs to overlay an dialog above filebrowser, and after that the file is "finished"   Special case of DEVv
 

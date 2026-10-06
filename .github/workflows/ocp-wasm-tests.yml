@@ -1,0 +1,53 @@
+name: OCP WASM Tests
+
+on:
+  push:
+    branches:
+      - master
+      - release/ocp-wasm-0.1.0
+  pull_request:
+
+jobs:
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Emscripten 5.0.2
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 5.0.2
+
+      - name: Install the xa 6502 assembler
+        run: sudo apt-get update && sudo apt-get install -y xa65
+
+      - name: Build
+        run: ./wasm/build.sh
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Test
+        working-directory: wasm/tests
+        run: npm install && npm test
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocp-wasm-build
+          path: |
+            wasm/build/index.html
+            wasm/build/visitor-file.js
+            wasm/build/ocp.js
+            wasm/build/ocp.wasm
+            wasm/build/*.wasm
+            wasm/build/ocp.data
+            wasm/build/COPYING
+            wasm/build/UNIFONT-LICENSE.txt
+            wasm/build/sample-files
+          if-no-files-found: error

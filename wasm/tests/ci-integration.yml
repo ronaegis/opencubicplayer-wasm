@@ -1,0 +1,232 @@
+# GitHub Actions CI Configuration for OCP WASM Tests
+# Place this in .github/workflows/ocp-wasm-tests.yml
+
+name: OCP WASM Tests
+
+on:
+  push:
+    branches: [ master, develop ]
+    paths:
+      - 'wasm/**'
+      - '.github/workflows/ocp-wasm-tests.yml'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'wasm/**'
+
+jobs:
+  wasm-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Emscripten
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: latest
+        actions-cache-folder: 'emsdk-cache'
+
+    - name: Build WASM
+      run: |
+        cd wasm
+        ./build.sh
+
+    - name: Upload WASM artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ocp-wasm-build
+        path: wasm/build
+        retention-days: 1
+
+  canvas-tests:
+    needs: wasm-build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: wasm/tests/package.json
+
+    - name: Download WASM artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ocp-wasm-build
+        path: wasm/
+
+    - name: Link build artifacts
+      run: |
+        cd wasm/tests
+        ln -sfn ../build build
+
+    - name: Install test dependencies
+      run: |
+        cd wasm/tests
+        npm install
+
+    - name: Run canvas rendering tests
+      run: |
+        cd wasm/tests
+        npm run test:canvas -- --ci --verbose --output-file canvas-results.json
+
+    - name: Upload canvas test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: canvas-test-results
+        path: wasm/tests/canvas-results.json
+
+  audio-tests:
+    needs: wasm-build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: wasm/tests/package.json
+
+    - name: Download WASM artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ocp-wasm-build
+        path: wasm/
+
+    - name: Link build artifacts
+      run: |
+        cd wasm/tests
+        ln -sfn ../build build
+
+    - name: Install test dependencies
+      run: |
+        cd wasm/tests
+        npm install
+
+    - name: Run audio output tests
+      run: |
+        cd wasm/tests
+        npm run test:audio -- --ci --verbose --output-file audio-results.json
+
+    - name: Upload audio test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: audio-test-results
+        path: wasm/tests/audio-results.json
+
+  integration-tests:
+    needs: [canvas-tests, audio-tests]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: wasm/tests/package.json
+
+    - name: Download WASM artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ocp-wasm-build
+        path: wasm/
+
+    - name: Link build artifacts
+      run: |
+        cd wasm/tests
+        ln -sfn ../build build
+
+    - name: Install test dependencies
+      run: |
+        cd wasm/tests
+        npm install
+
+    - name: Run complete test suite
+      run: |
+        cd wasm/tests
+        npm run test:ci -- --output-file integration-results.json
+
+    - name: Generate test summary
+      run: |
+        cd wasm/tests
+        node -e "
+        const fs = require('fs');
+        const results = JSON.parse(fs.readFileSync('integration-results.json', 'utf8'));
+        console.log('## OCP WASM Test Results');
+        console.log('');
+        console.log('| Test Suite | Total | Passed | Failed | Success Rate |');
+        console.log('|------------|-------|--------|--------|--------------|');
+        if (results.canvas) {
+          console.log(\`| Canvas Rendering | \${results.canvas.total} | \${results.canvas.passed} | \${results.canvas.failed} | \${results.canvas.successRate}% |\`);
+        }
+        if (results.audio) {
+          console.log(\`| Audio Output | \${results.audio.total} | \${results.audio.passed} | \${results.audio.failed} | \${results.audio.successRate}% |\`);
+        }
+        console.log(\`| **Overall** | **\${results.overall.total}** | **\${results.overall.passed}** | **\${results.overall.failed}** | **\${results.overall.successRate}%** |\`);
+        console.log('');
+        if (results.overall.failed > 0) {
+          console.log('### Failed Tests');
+          if (results.canvas) {
+            results.canvas.results.filter(r => !r.passed).forEach(test => {
+              console.log(\`- [Canvas] \${test.name}: \${test.details}\`);
+            });
+          }
+          if (results.audio) {
+            results.audio.results.filter(r => !r.passed).forEach(test => {
+              console.log(\`- [Audio] \${test.name}: \${test.details}\`);
+            });
+          }
+        }
+        " > test-summary.md
+
+    - name: Comment PR with test results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('wasm/tests/test-summary.md', 'utf8');
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: summary
+          });
+
+    - name: Upload integration test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          wasm/tests/integration-results.json
+          wasm/tests/test-summary.md
+
+    - name: Fail if tests failed
+      run: |
+        cd wasm/tests
+        node -e "
+        const results = JSON.parse(require('fs').readFileSync('integration-results.json', 'utf8'));
+        if (results.overall.failed > 0) {
+          console.error('Tests failed!');
+          process.exit(1);
+        }
+        console.log('All tests passed!');
+        "

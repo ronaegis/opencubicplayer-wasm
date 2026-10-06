@@ -202,3 +202,7 @@ static void modland_com_setup_Run (void **token, const struct DevInterfaceAPI_t 
 		framelock ();
 	}
 }
+
+#ifdef OCP_WASM_FILESEL_STEPPER
+#include "wasm-stepper/modland-com-setup-stepper.inc.c"
+#endif

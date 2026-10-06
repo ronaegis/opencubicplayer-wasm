@@ -21,7 +21,11 @@
 
 extern "C"
 {
+#if defined(WASM_BUILD)
+#include "../wasm/config.h"
+#else
 #include "../config.h"
+#endif
 }
 #include <ancient/ancient.hpp>
 #include <stdlib.h>

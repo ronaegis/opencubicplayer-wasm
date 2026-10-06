@@ -1,0 +1,39 @@
+{
+  "name": "ocp-wasm-tests",
+  "version": "1.0.0",
+  "description": "CLI test suite for OpenCubicPlayer WASM canvas rendering and sound output",
+  "main": "test-runner.js",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "scripts": {
+    "test": "node test-runner.js && node test-visitor-file.js && npm run test:validation",
+    "test:canvas": "node test-canvas.js",
+    "test:audio": "node test-audio.js",
+    "test:validation": "jest cpiface-wrapper.test.js",
+    "test:ci": "node test-runner.js --ci && npm run test:validation",
+    "test:headless": "node test-runner.js --headless",
+    "test:server": "node test-server.js",
+    "setup": "npm install"
+  },
+  "dependencies": {
+    "puppeteer": "^24.0.0",
+    "chalk": "^4.1.2",
+    "commander": "^12.0.0",
+    "express": "^4.21.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "keywords": [
+    "opencubicplayer",
+    "wasm",
+    "audio",
+    "canvas",
+    "testing"
+  ],
+  "author": "Christophe Thibault",
+  "license": "GPL-2.0"
+}
