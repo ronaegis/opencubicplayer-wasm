@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "path": "chopper.ahx",
+    "size": 14687,
+    "title": "GET TO THE CHOPPER!",
+    "composer": "Hoffman",
+    "artist": "h0ffman",
+    "modtype": "AHX",
+    "comment": "Datastorm 2017. Mod Archive 185663. Mod Archive Distribution license."
+  },
+  {
+    "path": "h0ffman_-_everyway.mod",
+    "size": 390554,
+    "title": "everyway",
+    "composer": "Hoffman",
+    "artist": "h0ffman",
+    "modtype": "MOD",
+    "channels": 4,
+    "comment": "Sundown 2016. Mod Archive 182049. Mod Archive Distribution license."
+  },
+  {
+    "path": "onivarmx.it",
+    "size": 2141812,
+    "title": "Oniva (Depressio Remix)",
+    "composer": "Depressio",
+    "artist": "depressio",
+    "modtype": "IT",
+    "comment": "DJ Yan, remixed by Depressio, 2003. Also credits MAZ. Mod Archive 50727. Mod Archive Distribution license."
+  }
+]
