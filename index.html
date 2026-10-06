@@ -33,6 +33,9 @@
         }
 
         #canvas {
+            box-sizing: border-box;
+            width: 1280px;
+            height: 1024px;
             border: 2px solid #444;
             border-radius: 5px;
             margin: 20px 0;
@@ -412,7 +415,7 @@
                     if (window.updateLoadingStatus) {
                         window.updateLoadingStatus(`Loading ${plugin.name}...`);
                     }
-                    const response = await fetch(plugin.url + '?v=9');
+                    const response = await fetch(plugin.url + '?v=10');
                     if (!response.ok) {
                         throw new Error(`Failed to fetch ${plugin.url}: ${response.status}`);
                     }
@@ -438,6 +441,13 @@
 
         // Setup emscripten module
         var Module = {
+            locateFile: function(path, prefix) {
+                var url = (prefix || '') + path;
+                if (/\.(wasm|data)$/.test(path)) {
+                    url += '?v=10';
+                }
+                return url;
+            },
             preRun: [
                 function() {
                     if (typeof Module.addRunDependency !== 'function') {
@@ -1052,13 +1062,13 @@
         <h3>Instructions:</h3>
         <ul>
             <li>Use "Open a module from this computer" above, or drop a file on that box. The bytes are written to /music and show up in the on-canvas file selector.</li>
-            <li>Open the file from that selector. Playback controls are the desktop player's keys inside the canvas. F returns to the selector during playback. Esc returns to the selector in this browser build. Press F1 inside the player for the rest of the keys.</li>
+            <li>Open the file from that selector. Playback controls are the desktop player's keys inside the canvas. F returns to the selector during playback. Esc returns to the selector in this browser build. Press F1 for help, then F1 or Esc to close it.</li>
             <li>Audio CD and MusicBrainz lookups are not in this build. There is no service worker. Settings are stored in this browser under /home/web_user/.ocp; closing the tab can drop the last write.</li>
             <li>GNU GPL version 2. Source for this page is the ocp-wasm-0.1.0 tag. See COPYING and UNIFONT-LICENSE.txt.</li>
         </ul>
     </div>
 
     <!-- Load the generated WASM script -->
-    <script src="ocp.js?v=8"></script>
+    <script src="ocp.js?v=10"></script>
 </body>
 </html>
