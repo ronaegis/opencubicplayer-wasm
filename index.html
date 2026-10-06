@@ -97,6 +97,16 @@
             margin: 8px auto 0 auto;
             color: #fff;
         }
+
+        .hosting {
+            margin: 0 0 20px 0;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .hosting a {
+            color: #00ff00;
+        }
     </style>
 </head>
 <body>
@@ -119,9 +129,9 @@
         Ready - launch the in-player file selector to begin
     </div>
 
-    <div class="status" id="playback-status" style="margin-bottom: 20px;">
-        Status: Idle
-    </div>
+    <p class="hosting">
+        <a href="https://github.com/ronaegis/opencubicplayer-wasm/blob/release/ocp-wasm-0.1.0/wasm/HOSTING.md">How to host this page</a>
+    </p>
 
     <div class="visitor-file" id="visitor-file">
         <label for="visitor-file-input">Open a module from this computer</label>
@@ -843,13 +853,11 @@
                 audioPromise.then(() => {
                     console.log('Web Audio Context ready, starting playback...');
                     Module.ccall('play', null, [], []);
-                    document.getElementById('playback-status').textContent = 'Status: Playing';
                     updateStatus('Playback started');
                 }).catch((error) => {
                     console.error('Failed to resume Web Audio Context:', error);
                     // Try to start playback anyway
                     Module.ccall('play', null, [], []);
-                    document.getElementById('playback-status').textContent = 'Status: Playing';
                     updateStatus('Playback started');
                 });
 
@@ -863,7 +871,6 @@
 
             try {
                 Module.ccall('pause_playback', null, [], []);
-                document.getElementById('playback-status').textContent = 'Status: Paused';
                 updateStatus('Paused');
             } catch (error) {
                 showError('Failed to pause playback: ' + error.message);
@@ -875,7 +882,6 @@
 
             try {
                 Module.ccall('stop', null, [], []);
-                document.getElementById('playback-status').textContent = 'Status: Stopped';
                 updateStatus('Stopped');
             } catch (error) {
                 showError('Failed to stop playback: ' + error.message);
