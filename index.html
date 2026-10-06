@@ -10,15 +10,19 @@
             background-color: #000;
             color: #fff;
             margin: 0;
-            padding: 20px;
+            padding: 12px 16px 16px;
+            box-sizing: border-box;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: stretch;
+            overflow: auto;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 8px;
+            flex: 0 0 auto;
         }
 
         .header h1 {
@@ -34,19 +38,23 @@
 
         #canvas {
             box-sizing: border-box;
-            width: 1280px;
-            height: 1024px;
+            width: 100%;
+            height: calc(100vh - 280px);
+            min-width: 640px;
+            min-height: 160px;
+            flex: 0 0 auto;
             border: 2px solid #444;
             border-radius: 5px;
-            margin: 20px 0;
+            margin: 8px 0;
             background-color: #000;
         }
 
         .status {
             color: #888;
             text-align: center;
-            margin: 10px 0;
+            margin: 4px 0;
             font-size: 14px;
+            flex: 0 0 auto;
         }
 
         .instructions {
@@ -54,9 +62,11 @@
             border: 1px solid #333;
             border-radius: 5px;
             padding: 15px;
-            margin: 20px 0;
+            margin: 12px auto;
             max-width: 600px;
+            width: 100%;
             font-size: 12px;
+            flex: 0 0 auto;
         }
 
         .instructions h3 {
@@ -86,10 +96,12 @@
             border: 1px dashed #00ff00;
             border-radius: 5px;
             padding: 12px;
-            margin: 10px 0 0 0;
+            margin: 8px auto 0 auto;
             max-width: 600px;
+            width: 100%;
             font-size: 13px;
             text-align: center;
+            flex: 0 0 auto;
         }
 
         .visitor-file input {
@@ -99,9 +111,10 @@
         }
 
         .hosting {
-            margin: 0 0 20px 0;
+            margin: 0 0 8px 0;
             font-size: 14px;
             text-align: center;
+            flex: 0 0 auto;
         }
 
         .hosting a {
@@ -760,6 +773,10 @@
                         loadingIndicator.style.opacity = '0';
                         setTimeout(function() {
                             loadingIndicator.remove();
+                            if (typeof fitPlayerCanvas === 'function') {
+                                fitPlayerCanvas();
+                                window.dispatchEvent(new Event('resize'));
+                            }
                         }, 500);
                     }
                 }, 1000); // Show final status for 1 second
@@ -1075,6 +1092,41 @@
     </div>
 
     <!-- Load the generated WASM script -->
+    <script>
+        function fitPlayerCanvas() {
+            var canvas = document.getElementById('canvas');
+            var instructions = document.querySelector('.instructions');
+            if (!canvas) {
+                return;
+            }
+            var top = canvas.getBoundingClientRect().top;
+            var below = 0;
+            var node = canvas.nextElementSibling;
+            while (node) {
+                if (node !== instructions && node.tagName !== 'SCRIPT') {
+                    var cs = getComputedStyle(node);
+                    if (cs.display !== 'none') {
+                        below += node.getBoundingClientRect().height;
+                        below += (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+                    }
+                }
+                node = node.nextElementSibling;
+            }
+            var canvasStyle = getComputedStyle(canvas);
+            var bodyStyle = getComputedStyle(document.body);
+            below += (parseFloat(canvasStyle.marginTop) || 0) + (parseFloat(canvasStyle.marginBottom) || 0);
+            below += parseFloat(bodyStyle.paddingBottom) || 0;
+            var padX = (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0);
+            /* 80x20 cells at the 8x8 font. A smaller box makes SDL grow the bitmap to 640x160, which the browser then stretches. */
+            var width = Math.max(640, Math.floor(window.innerWidth - padX));
+            var scrollbar = (width + padX > window.innerWidth) ? 16 : 0;
+            var height = Math.max(160, Math.floor(window.innerHeight - top - below - scrollbar));
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+        }
+        fitPlayerCanvas();
+        window.addEventListener('resize', fitPlayerCanvas);
+    </script>
     <script src="ocp.js?v=10"></script>
 </body>
 </html>
