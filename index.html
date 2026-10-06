@@ -412,7 +412,7 @@
                     if (window.updateLoadingStatus) {
                         window.updateLoadingStatus(`Loading ${plugin.name}...`);
                     }
-                    const response = await fetch(plugin.url);
+                    const response = await fetch(plugin.url + '?v=9');
                     if (!response.ok) {
                         throw new Error(`Failed to fetch ${plugin.url}: ${response.status}`);
                     }
