@@ -1,5 +1,7 @@
 # Open Cubic Player
 
+Live demo: https://ronaegis.github.io/opencubicplayer-wasm/
+
 This tree is a fork of Stian Skjelstad's UNIX OpenCubicPlayer, https://github.com/mywave82/opencubicplayer, which is itself the UNIX port of [Open Cubic Player](https://www.cubic.org/player/). The UNIX player is a text-based player with some few graphical views. Visual output can be done through nCurses, Linux console (VCSA + FrameBuffer), X11, or SDL/SDL2/SDL3. This port can be compiled for various different Unix-based operating systems, including MinGW compilers.
 
 Desktop bugs that reproduce on the upstream tree belong at https://github.com/mywave82/opencubicplayer. Browser-port bugs belong on this fork: https://github.com/ronaegis/opencubicplayer-wasm/issues.
@@ -15,15 +17,29 @@ macOS notes are in README.Darwin and in the section below. `brew install ocp` in
 
 # WebAssembly build (experimental)
 
-Browser port of the same player. It draws the cpiface UI into a 1280×1024 canvas. Version 3.5.0+wasm.0.1.0. Build and run instructions are in wasm/README.md. The page can open a module from the computer; that file is listed by the in-canvas file selector under /music.
-
-Live demo: https://ronaegis.github.io/opencubicplayer-wasm/
+Browser port of the same player. It draws the cpiface UI into a 1280×1024 canvas. Version 3.5.0+wasm.0.1.0. Build and run instructions are in wasm/README.md. Hosting and which plugins to ship are in wasm/HOSTING.md. The page can open a module from the computer; that file is listed by the in-canvas file selector under /music. Modland browsing is described in [Integrated support for modland.com](#integrated-support-for-modlandcom).
 
 ```bash
 # Emscripten 5.0.2 (emcc on PATH)
 ./wasm/build.sh
 cd wasm/build && python3 -m http.server 8080
 ```
+
+## Demo music
+
+The browser build ships nine unmodified modules in `wasm/sample-files/`. They stay as separate files beside the page, under the [Mod Archive Distribution license](https://modarchive.org/index.php?faq-licensing): the original file, unmodified, and unbundled. Full notes are in `wasm/sample-files/LICENSE.md`.
+
+| File | Title | Credit | Mod Archive |
+| --- | --- | --- | --- |
+| `4mats-madness.mod` | 4-mat's.madness | 4-mat of Anarchy | [66036](https://modarchive.org/module.php?66036) |
+| `chopper.ahx` | GET TO THE CHOPPER! | Hoffman (h0ffman), Datastorm 2017 | [185663](https://modarchive.org/module.php?185663) |
+| `h0ffman_-_everyway.mod` | everyway | Hoffman (h0ffman), Sundown 2016 intro Everyway | [182049](https://modarchive.org/module.php?182049) |
+| `onivarmx.it` | Oniva (Depressio Remix) | DJ Yan, remixed by Depressio (Charlot Ductan), 2003. Also credits MAZ. | [50727](https://modarchive.org/module.php?50727) |
+| `2nd_skav.s3m` | UnreaL ][ - The 2ND Reality | Skaven (Future Crew) | [212082](https://modarchive.org/module.php?212082) |
+| `exc_lcd.xm` | Reaching Lucid State | Excalibur (Visa Uotila), 2002 | [42808](https://modarchive.org/module.php?42808) |
+| `pm_fract.stm` | Fracture in space | Purple Motion, 1991 | [55576](https://modarchive.org/module.php?55576) |
+| `_1EUPHOR.669` | Euphorium | Steve Mason, 13 Feb 1994. Samples credited to Purple Motion. | [32323](https://modarchive.org/module.php?32323) |
+| `moc-riff.dmf` | R.i.F.F.S.A.M.D.S.F.-LSD | Mockery / D-Lusion. X-Tracker demo tune. | [192909](https://modarchive.org/module.php?192909) |
 
 ![Screenshot](doc/screenshot-01.png)
 
@@ -177,10 +193,20 @@ Extension | Notes
 
 ## Integrated support for modland.com
 
-Built into the file-browser is support for directly browsing <https://modland.com> utilizing `curl`.
+The file browser can list and play files from <https://modland.com>. Fetch the catalog once from `setup.dev` on the `modland.com:` drive before any module directories appear.
 
-An initial fetch of the database containing all the file names is required for this feature to work.
-This is available in the `modland.com/setup.dev` option inside of the built-in file browser.
+On a desktop build that download uses `curl`. In the browser build the same dialog downloads `allmods.zip` from the selected mirror. The default mirror is `https://modland.com/allmods.zip` (about 5.7 MB). That host sends `Access-Control-Allow-Origin: *`, so the page can fetch it.
+
+### Browser file selector
+
+1. Move to the `modland.com` drive and press Enter. The path changes to `modland.com:/*`.
+2. The highlight then sits on the `file:` drive, the place you just left. Enter on that row returns to `file:/*`. `setup.dev` is the row above the highlight. Until the database is fetched, that is the only Modland entry.
+3. Press Up so `setup.dev` is highlighted, then Enter.
+4. The dialog opens on **1. Select mirror**. Press Down and Enter on **2. Fetch database**. After a database is stored, that line reads **2. Refresh database**.
+5. Wait for the download and the parse to finish, then press Esc.
+6. Format directories are listed under `modland.com:`. Open a directory, then a file. Opening a file downloads that module from the mirror.
+
+The database is stored in this browser at `/home/web_user/.ocp/data/`. The page writes that directory through IndexedDB. Closing the tab can drop the last write. `modland.wasm` has to be present on the host for the drive to appear. That file is covered in `wasm/HOSTING.md`.
 
 ## Manual Page
 

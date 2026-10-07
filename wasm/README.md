@@ -18,7 +18,7 @@ cd wasm
 ./build.sh --clean      # delete build/ and .emcache, then exit
 ```
 
-Production flags from `CMakeLists.txt`: `-O3`, assertions off, `INITIAL_MEMORY` 16 MB, `ALLOW_MEMORY_GROWTH` on, no memory maximum. Help is included. `sample-files/` is copied beside the page. This release ships no demo music there; see `sample-files/LICENSE.md`.
+Production flags from `CMakeLists.txt`: `-O3`, assertions off, `INITIAL_MEMORY` 16 MB, `ALLOW_MEMORY_GROWTH` on, no memory maximum. Help is included. `sample-files/` is copied beside the page and contains the nine demo modules credited in the root README and in `sample-files/LICENSE.md`.
 
 The script writes `build/ocp.js`, `build/ocp.wasm`, `build/ocp.data`, one `.wasm` side module per plugin, `index.html`, `visitor-file.js`, `COPYING`, and `UNIFONT-LICENSE.txt`.
 
@@ -32,6 +32,8 @@ python3 -m http.server 8080
 ```
 
 `python3 -m http.server` does not set a WASM MIME type. Some hosts need `application/wasm` for `.wasm`. SharedArrayBuffer and COOP/COEP headers are not required.
+
+What to upload, how to serve it, and how to choose plugins: [HOSTING.md](HOSTING.md).
 
 ## What the page does
 

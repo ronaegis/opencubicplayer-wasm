@@ -1,1 +1,67 @@
-{}
+{
+  "4mats-madness.mod": {
+    "title": "4-mat's.madness",
+    "composer": "4-mat",
+    "artist": "4mat",
+    "modtype": "MOD",
+    "channels": 4,
+    "comment": "4-mat of Anarchy. Mod Archive 66036. Mod Archive Distribution license."
+  },
+  "chopper.ahx": {
+    "title": "GET TO THE CHOPPER!",
+    "composer": "Hoffman",
+    "artist": "h0ffman",
+    "modtype": "AHX",
+    "comment": "Datastorm 2017. Mod Archive 185663. Mod Archive Distribution license."
+  },
+  "h0ffman_-_everyway.mod": {
+    "title": "everyway",
+    "composer": "Hoffman",
+    "artist": "h0ffman",
+    "modtype": "MOD",
+    "channels": 4,
+    "comment": "Sundown 2016. Mod Archive 182049. Mod Archive Distribution license."
+  },
+  "onivarmx.it": {
+    "title": "Oniva (Depressio Remix)",
+    "composer": "Depressio",
+    "artist": "depressio",
+    "modtype": "IT",
+    "comment": "DJ Yan, remixed by Depressio, 2003. Also credits MAZ. Mod Archive 50727. Mod Archive Distribution license."
+  },
+  "2nd_skav.s3m": {
+    "title": "UnreaL ][ - The 2ND Reality",
+    "composer": "Skaven",
+    "artist": "Skaven",
+    "modtype": "S3M",
+    "comment": "Future Crew. Mod Archive 212082. Mod Archive Distribution license."
+  },
+  "exc_lcd.xm": {
+    "title": "Reaching Lucid State",
+    "composer": "Excalibur",
+    "artist": "Excalibur",
+    "modtype": "XM",
+    "comment": "Visa Uotila, 2002. Mod Archive 42808. Mod Archive Distribution license."
+  },
+  "pm_fract.stm": {
+    "title": "Fracture in space",
+    "composer": "Purple Motion",
+    "artist": "Purple Motion",
+    "modtype": "STM",
+    "comment": "1991. Mod Archive 55576. Mod Archive Distribution license."
+  },
+  "_1EUPHOR.669": {
+    "title": "Euphorium",
+    "composer": "Steve Mason",
+    "artist": "Steve Mason",
+    "modtype": "669",
+    "comment": "13 Feb 1994. Samples credited to Purple Motion. Mod Archive 32323. Mod Archive Distribution license."
+  },
+  "moc-riff.dmf": {
+    "title": "R.i.F.F.S.A.M.D.S.F.-LSD",
+    "composer": "Mockery",
+    "artist": "D-Lusion",
+    "modtype": "DMF",
+    "comment": "X-Tracker demo tune. Mod Archive 192909. Mod Archive Distribution license."
+  }
+}

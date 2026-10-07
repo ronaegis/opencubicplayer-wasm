@@ -18,7 +18,7 @@ Build Configurations:
                      - Debug symbols disabled
                      - Assertions disabled
                      - Optimization: -O3
-                     - Stages sample-files/ (license note only in this release)
+                     - Stages sample-files/ (nine Mod Archive modules; see sample-files/LICENSE.md)
                      - Includes help and metadata
                      - Estimated size: ~10-15 MB (gzipped)
 
