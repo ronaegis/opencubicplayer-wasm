@@ -88,24 +88,67 @@
             text-underline-offset: 3px;
         }
 
+        .screen {
+            position: relative;
+            align-self: center;
+            flex: 0 0 auto;
+            margin: 4px 0 12px;
+        }
+
         #canvas {
             box-sizing: border-box;
-            align-self: center;
+            display: block;
             width: 640px;
-            height: 360px;
+            height: 352px;
             min-width: 640px;
-            min-height: 160px;
+            min-height: 320px;
             flex: 0 0 auto;
-            border: 1px solid rgba(255, 255, 255, 0.16);
-            border-radius: 12px;
-            margin: 4px 0 12px;
+            margin: 0;
+            border: 0;
+            border-radius: 12px 12px 0 12px;
             background-color: #000;
-            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 18px 50px rgba(0, 0, 0, 0.35);
         }
 
         #canvas:focus-visible {
             outline: 2px solid var(--accent);
             outline-offset: 3px;
+        }
+
+        .screen-resize {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            z-index: 3;
+            width: 28px;
+            height: 28px;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: #fff;
+            cursor: nwse-resize;
+            touch-action: none;
+            filter: drop-shadow(0 0 1px #000);
+        }
+
+        .screen-resize:hover {
+            color: var(--accent);
+        }
+
+        .screen-resize svg {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            display: block;
+            overflow: visible;
+        }
+
+        body.is-resizing-screen,
+        body.is-resizing-screen * {
+            cursor: nwse-resize !important;
+            user-select: none;
         }
 
         .status {
@@ -148,10 +191,18 @@
 
         .loading {
             display: none;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            width: max-content;
+            max-width: 90%;
+            margin: 0;
+            pointer-events: none;
             color: var(--accent);
             text-align: center;
-            margin: 4px 0 8px;
-            flex: 0 0 auto;
+            text-shadow: 0 1px 8px #000;
         }
 
         .loading p {
@@ -328,11 +379,17 @@
         </div>
     </div>
 
-    <canvas id="canvas" width="1280" height="1024" tabindex="0"></canvas>
-
-    <div class="loading" id="loading">
-        <p>Loading OpenCubicPlayer WASM...</p>
-        <p id="loading-status"></p>
+    <div class="screen">
+        <canvas id="canvas" width="1280" height="1024" tabindex="0"></canvas>
+        <button type="button" class="screen-resize" id="screen-resize" aria-label="Resize the screen">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                <path d="M16 7 L7 16 M16 11 L11 16 M16 15 L15 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+        </button>
+        <div class="loading" id="loading">
+            <p>Loading OpenCubicPlayer WASM...</p>
+            <p id="loading-status"></p>
+        </div>
     </div>
 
     <div class="status" id="status">
@@ -970,20 +1027,15 @@
 
                 isWasmLoaded = true;
 
-                // Keep loading indicator visible for a moment so users can see the final status
-                setTimeout(function() {
-                    const loadingIndicator = document.getElementById('loading');
-                    if (loadingIndicator) {
-                        loadingIndicator.style.transition = 'opacity 0.5s';
-                        loadingIndicator.style.opacity = '0';
-                        setTimeout(function() {
-                            loadingIndicator.remove();
-                        }, 500);
-                    }
-                }, 1000); // Show final status for 1 second
+                const loadingIndicator = document.getElementById('loading');
+                if (loadingIndicator) {
+                    loadingIndicator.style.transition = 'opacity 0.2s';
+                    loadingIndicator.style.opacity = '0';
+                    setTimeout(function() {
+                        loadingIndicator.remove();
+                    }, 200);
+                }
 
-                // Update loading status with completion message
-                window.updateLoadingStatus('Initialization complete!');
                 updateStatus('OpenCubicPlayer WASM ready - use the in-app selector to load music');
 
                 // Set up Web Audio Context for user interaction
@@ -1295,6 +1347,7 @@
     <!-- Load the generated WASM script -->
     <script>
         var canvasRatio = '16:9';
+        var canvasSizedByHand = false;
 
         function storedCanvasRatio() {
             try {
@@ -1316,40 +1369,43 @@
         }
 
         function chooseCanvasSize(availW, availH) {
-            var minW = 640;
-            if (canvasRatio === 'full') {
-                return {
-                    width: Math.max(minW, availW),
-                    height: Math.max(160, availH)
-                };
+            /* Screen mode is an 8x16 cell grid. The canvas is exactly that bitmap, so the browser does not scale it. */
+            var cellW = 8;
+            var cellH = 16;
+            var minCols = 80;
+            var minRows = canvasRatio === '4:3' ? 30 : (canvasRatio === '16:9' ? 22 : 20);
+            var maxCols = Math.floor(availW / cellW);
+            var maxRows = Math.floor(availH / cellH);
+            var cols = Math.max(minCols, maxCols);
+            var rows = Math.max(minRows, maxRows);
+            if (canvasRatio !== 'full') {
+                var aspect = canvasRatio === '16:9' ? (16 / 9) : (4 / 3);
+                var colsPerRow = aspect * cellH / cellW;
+                rows = Math.max(minRows, maxRows);
+                cols = Math.round(rows * colsPerRow);
+                if (cols > maxCols) {
+                    cols = Math.max(minCols, maxCols);
+                    rows = Math.max(minRows, Math.round(cols / colsPerRow));
+                }
+                if (cols < minCols) cols = minCols;
+                if (rows < minRows) rows = minRows;
             }
-            var widthUnit = canvasRatio === '16:9' ? 16 : 4;
-            var heightUnit = canvasRatio === '16:9' ? 9 : 3;
-            var minH = canvasRatio === '16:9' ? 360 : 480;
-            if (availW < widthUnit) availW = widthUnit;
-            if (availH < heightUnit) availH = heightUnit;
-            var width = availW - (availW % widthUnit);
-            var height = width * heightUnit / widthUnit;
-            if (height > availH) {
-                height = availH - (availH % heightUnit);
-                width = height * widthUnit / heightUnit;
-            }
-            if (width < minW || height < minH) {
-                width = minW;
-                height = minH;
-            }
-            return { width: width, height: height };
+            return { width: cols * cellW, height: rows * cellH };
         }
 
         function fitPlayerCanvas() {
+            if (canvasSizedByHand) {
+                return;
+            }
             var canvas = document.getElementById('canvas');
             var instructions = document.querySelector('.instructions');
             if (!canvas) {
                 return;
             }
+            var anchor = canvas.closest('.screen') || canvas;
             var top = canvas.getBoundingClientRect().top + window.scrollY;
             var below = 0;
-            var node = canvas.nextElementSibling;
+            var node = anchor.nextElementSibling;
             while (node) {
                 if (node !== instructions && node.id !== 'loading' && node.tagName !== 'SCRIPT') {
                     var cs = getComputedStyle(node);
@@ -1360,12 +1416,12 @@
                 }
                 node = node.nextElementSibling;
             }
-            var canvasStyle = getComputedStyle(canvas);
+            var anchorStyle = getComputedStyle(anchor);
             var bodyStyle = getComputedStyle(document.body);
-            below += (parseFloat(canvasStyle.marginTop) || 0) + (parseFloat(canvasStyle.marginBottom) || 0);
+            below += (parseFloat(anchorStyle.marginTop) || 0) + (parseFloat(anchorStyle.marginBottom) || 0);
             below += parseFloat(bodyStyle.paddingBottom) || 0;
             var padX = (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0);
-            /* 80 columns need 640px. A narrower box makes SDL grow the bitmap to 640x160, which the browser then stretches. */
+            /* 80 columns need 640px. A shorter grid makes SDL grow the bitmap to 640x160 and the browser scales that. */
             var availW = Math.floor(window.innerWidth - padX);
             var scrollbar = (640 + padX > window.innerWidth) ? 16 : 0;
             var availH = Math.floor(window.innerHeight - top - below - scrollbar);
@@ -1375,6 +1431,7 @@
         }
 
         function applyCanvasRatio(ratio) {
+            canvasSizedByHand = false;
             canvasRatio = ratio;
             try {
                 localStorage.setItem('ocp_page_ratio', ratio);
@@ -1394,6 +1451,58 @@
                 var button = event.target.closest('button');
                 if (!button) return;
                 applyCanvasRatio(button.getAttribute('data-ratio'));
+            });
+        }
+
+        function snapScreenMode(width, height) {
+            var cols = Math.round(width / 8);
+            var rows = Math.round(height / 16);
+            if (cols < 80) cols = 80;
+            if (rows < 20) rows = 20;
+            return { width: cols * 8, height: rows * 16 };
+        }
+
+        var resizeHandle = document.getElementById('screen-resize');
+        if (resizeHandle) {
+            resizeHandle.addEventListener('pointerdown', function(event) {
+                if (event.button !== 0) return;
+                event.preventDefault();
+                var canvas = document.getElementById('canvas');
+                var origin = canvas.getBoundingClientRect();
+                var grabX = event.clientX - origin.right;
+                var grabY = event.clientY - origin.bottom;
+                canvasSizedByHand = true;
+                markCanvasRatio('');
+                resizeHandle.setPointerCapture(event.pointerId);
+                document.body.classList.add('is-resizing-screen');
+                var pending = null;
+                var frame = 0;
+                function applyPointer(ev) {
+                    var size = snapScreenMode(ev.clientX - origin.left - grabX, ev.clientY - origin.top - grabY);
+                    canvas.style.width = size.width + 'px';
+                    canvas.style.height = size.height + 'px';
+                    window.dispatchEvent(new Event('resize'));
+                }
+                function onMove(ev) {
+                    pending = ev;
+                    if (frame) return;
+                    frame = requestAnimationFrame(function() {
+                        frame = 0;
+                        if (pending) applyPointer(pending);
+                    });
+                }
+                function onEnd(ev) {
+                    resizeHandle.removeEventListener('pointermove', onMove);
+                    resizeHandle.removeEventListener('pointerup', onEnd);
+                    resizeHandle.removeEventListener('pointercancel', onEnd);
+                    if (frame) cancelAnimationFrame(frame);
+                    document.body.classList.remove('is-resizing-screen');
+                    applyPointer(ev);
+                    canvas.focus();
+                }
+                resizeHandle.addEventListener('pointermove', onMove);
+                resizeHandle.addEventListener('pointerup', onEnd);
+                resizeHandle.addEventListener('pointercancel', onEnd);
             });
         }
     </script>
