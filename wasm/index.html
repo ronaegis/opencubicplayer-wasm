@@ -700,7 +700,7 @@
                     if (window.updateLoadingStatus) {
                         window.updateLoadingStatus(`Loading ${plugin.name}...`);
                     }
-                    const response = await fetch(plugin.url + '?v=10');
+                    const response = await fetch(plugin.url + '?v=11');
                     if (!response.ok) {
                         throw new Error(`Failed to fetch ${plugin.url}: ${response.status}`);
                     }
@@ -729,7 +729,7 @@
             locateFile: function(path, prefix) {
                 var url = (prefix || '') + path;
                 if (/\.(wasm|data)$/.test(path)) {
-                    url += '?v=10';
+                    url += '?v=11';
                 }
                 return url;
             },
@@ -1506,6 +1506,6 @@
             });
         }
     </script>
-    <script src="ocp.js?v=10"></script>
+    <script src="ocp.js?v=11"></script>
 </body>
 </html>

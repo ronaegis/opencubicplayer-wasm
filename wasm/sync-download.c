@@ -11,7 +11,54 @@
 EM_JS(int, wasm_sync_download_js, (const char *url, const char *dest_path), {
   var u = UTF8ToString(url);
   var p = UTF8ToString(dest_path);
+  // SDL2 plays through a ScriptProcessorNode on the main thread. A synchronous
+  // XHR blocks that callback, and Chrome then replays the last output buffer
+  // until the main thread runs again. Disconnect and suspend before send().
+  function holdWebAudio() {
+    var held = { ctx: null, node: null, disconnected: false, suspended: false };
+    var sdl2 = (typeof Module !== 'undefined') ? Module['SDL2'] : null;
+    if (!sdl2) return held;
+    held.ctx = sdl2.audioContext || null;
+    if (sdl2.audio) {
+      held.node = sdl2.audio.scriptProcessorNode || null;
+      var live = sdl2.audio.currentOutputBuffer;
+      if (live) {
+        try {
+          for (var c = 0; c < live.numberOfChannels; c++) {
+            live.getChannelData(c).fill(0);
+          }
+        } catch (e) {
+        }
+      }
+    }
+    if (held.node) {
+      try {
+        held.node.disconnect();
+        held.disconnected = true;
+      } catch (e) {
+      }
+    }
+    if (held.ctx && held.ctx.state === 'running') {
+      try {
+        held.ctx.suspend();
+        held.suspended = true;
+      } catch (e) {
+      }
+    }
+    return held;
+  }
+  function releaseWebAudio(held) {
+    if (!held) return;
+    if (held.disconnected && held.node && held.ctx) {
+      try { held.node.connect(held.ctx.destination); } catch (e) {}
+    }
+    if (held.suspended && held.ctx) {
+      try { held.ctx.resume(); } catch (e) {}
+    }
+  }
+  var audioHeld = null;
   try {
+    audioHeld = holdWebAudio();
     var xhr = new XMLHttpRequest();
     xhr.open('GET', u, false);
     try {
@@ -48,6 +95,8 @@ EM_JS(int, wasm_sync_download_js, (const char *url, const char *dest_path), {
   } catch (e) {
     console.error('wasm_sync_download_js exception', e);
     return -1;
+  } finally {
+    releaseWebAudio(audioHeld);
   }
 });
 
