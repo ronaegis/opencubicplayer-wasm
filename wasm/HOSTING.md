@@ -30,13 +30,13 @@ Submodules the browser build compiles: `playsid/libsidplayfp-git`, `playsid/libr
 
 Those switches are `WASM_PRODUCTION_BUILD`, `WASM_INCLUDE_HELP`, `WASM_INCLUDE_ADPLUG_DB`, and `WASM_INCLUDE_SAMPLES`. Sample files are copied by `build.sh`. The CMake option only records that the copy was requested. `OCP_WASM_DEBUG_LOGGING` is off unless you pass `-DOCP_WASM_DEBUG_LOGGING=ON` to CMake yourself.
 
-`ocp.data` is the font, and on a production build the help database and `adplug.db`. It does not contain the demo modules.
+`ocp.data` is the font, and on a production build the help database, `adplug.db`, and the prebuilt Modland catalog. It does not contain the demo modules.
 
 ## Files to upload
 
 Upload the site files, which sit next to each other. Leave `CMakeFiles/`, object files, and the generated Makefile on the build machine. `wasm/build/` holds both.
 
-A production build of this tree is about 22 MB, of which `ocp.data` is about 12 MB and `ocp.wasm` is about 3.4 MB.
+A production build of this tree is about 35 MB, of which `ocp.data` is about 25 MB and `ocp.wasm` is about 3.4 MB.
 
 | Upload | Role |
 | --- | --- |
@@ -44,7 +44,7 @@ A production build of this tree is about 22 MB, of which `ocp.data` is about 12 
 | `visitor-file.js` | Writes a file the visitor picked into the in-browser `/music` directory |
 | `ocp.js` | Emscripten loader |
 | `ocp.wasm` | Player core. Must be from the same build as every side module |
-| `ocp.data` | Unifont, help, AdPlug database |
+| `ocp.data` | Unifont, help, AdPlug database, and the prebuilt Modland catalog |
 | `*.wasm` beside `ocp.js` | One side module per plugin |
 | `COPYING` | GPL-2 |
 | `UNIFONT-LICENSE.txt` | Font terms |

@@ -19,6 +19,7 @@ Build Configurations:
                      - Assertions disabled
                      - Optimization: -O3
                      - Stages sample-files/ (nine Mod Archive modules; see sample-files/LICENSE.md)
+                     - Builds CPMDLAND.DAT from Modland's allmods.zip and packs it into ocp.data
                      - Includes help and metadata
                      - Estimated size: ~10-15 MB (gzipped)
 
@@ -151,6 +152,47 @@ if ! command -v emmake >/dev/null 2>&1; then
 fi
 
 echo ""
+echo "Building the Modland catalog..."
+MODLAND_ZIP="${BUILD_DIR}/.allmods.zip"
+MODLAND_TXT="${BUILD_DIR}/.allmods.txt"
+MODLAND_DAT_DIR="${BUILD_DIR}/.modland-dat"
+if curl -fsSL -A "OpenCubicPlayer" -o "${MODLAND_ZIP}.partial" "https://modland.com/allmods.zip"; then
+    mv -f "${MODLAND_ZIP}.partial" "${MODLAND_ZIP}"
+else
+    rm -f "${MODLAND_ZIP}.partial"
+    echo "Warning: could not download allmods.zip" >&2
+fi
+if [[ -f "${MODLAND_ZIP}" ]]; then
+    MODLAND_DATE="$(unzip -l "${MODLAND_ZIP}" allmods.txt | awk '/allmods.txt$/ {print $2; exit}')"
+    if [[ "${MODLAND_DATE}" =~ ^([0-9]{2})-([0-9]{2})-([0-9]{4})$ ]]; then
+        MODLAND_YEAR="${BASH_REMATCH[3]}"
+        MODLAND_MONTH="${BASH_REMATCH[1]}"
+        MODLAND_DAY="${BASH_REMATCH[2]}"
+    elif [[ "${MODLAND_DATE}" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})$ ]]; then
+        MODLAND_YEAR="${BASH_REMATCH[1]}"
+        MODLAND_MONTH="${BASH_REMATCH[2]}"
+        MODLAND_DAY="${BASH_REMATCH[3]}"
+    else
+        MODLAND_YEAR="$(date +%Y)"
+        MODLAND_MONTH="$(date +%m)"
+        MODLAND_DAY="$(date +%d)"
+    fi
+    gcc -O2 -I"${SCRIPT_DIR}/host-makedb" -I"${SCRIPT_DIR}/.." -o "${BUILD_DIR}/modland-makedb" \
+        "${SCRIPT_DIR}/modland-makedb.c" "${SCRIPT_DIR}/../stuff/file.c"
+    unzip -p "${MODLAND_ZIP}" allmods.txt > "${MODLAND_TXT}"
+    rm -rf "${MODLAND_DAT_DIR}"
+    mkdir -p "${MODLAND_DAT_DIR}"
+    "${BUILD_DIR}/modland-makedb" "${MODLAND_TXT}" "${MODLAND_DAT_DIR}/" "${MODLAND_YEAR}" "${MODLAND_MONTH}" "${MODLAND_DAY}"
+    mv -f "${MODLAND_DAT_DIR}/CPMDLAND.DAT" "${BUILD_DIR}/CPMDLAND.DAT"
+    rm -rf "${MODLAND_DAT_DIR}" "${MODLAND_TXT}" "${MODLAND_ZIP}" "${BUILD_DIR}/modland-makedb"
+    echo "Built ${BUILD_DIR}/CPMDLAND.DAT"
+elif [[ -f "${BUILD_DIR}/CPMDLAND.DAT" ]]; then
+    echo "Warning: keeping the CPMDLAND.DAT already in ${BUILD_DIR}" >&2
+else
+    echo "Warning: no prebuilt Modland catalog. The modland.com drive stays empty until Refresh database." >&2
+fi
+rm -f "${BUILD_DIR}/allmods.zip"
+
 echo "Configuring build system..."
 emcmake cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" "${CMAKE_FLAGS[@]}"
 

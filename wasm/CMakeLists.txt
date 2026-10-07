@@ -91,6 +91,16 @@ else()
     message(STATUS "Excluding AdPlug database (use -DWASM_INCLUDE_ADPLUG_DB=ON to include)")
 endif()
 
+# Catalog produced by wasm/build.sh before configure. Parsing allmods.txt
+# happens in that host tool, not in the browser.
+if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/CPMDLAND.DAT")
+    set(MAIN_MODULE_LINKER_FLAGS "${MAIN_MODULE_LINKER_FLAGS} \
+    --preload-file ${CMAKE_CURRENT_BINARY_DIR}/CPMDLAND.DAT@/modland/CPMDLAND.DAT")
+    message(STATUS "Including prebuilt Modland catalog")
+else()
+    message(STATUS "No prebuilt Modland catalog (run wasm/build.sh to create CPMDLAND.DAT)")
+endif()
+
 # Sample files are now staged as external HTTP assets by the build script.
 if(WASM_INCLUDE_SAMPLES)
     message(STATUS "Sample music files will be served lazily over HTTP")
@@ -299,6 +309,7 @@ set(WASM_SOURCES
     wasm-platform-config-api.c
     generic-dialog-stepper.c
     loading-progress.c
+    modland-seed.c
 )
 
 # Plugin configurations (moved to playsid-plugin.cmake)

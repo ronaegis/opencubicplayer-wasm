@@ -59,6 +59,16 @@ signed int fsFileSelect(void)
 		return 0;
 	}
 
+	/* Install the catalog built by wasm/build.sh once IndexedDB has been read. */
+	{
+		extern int wasm_modland_seed_is_active(void);
+		extern int wasm_modland_seed_tick(const struct DevInterfaceAPI_t *API);
+		if (wasm_modland_seed_is_active())
+		{
+			wasm_modland_seed_tick(&DevInterfaceAPI);
+		}
+	}
+
 	/* Normal file selector logic */
 	if (!fsFileSelectStepperIsActive(&fs_stepper_engine))
 	{

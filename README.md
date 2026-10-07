@@ -193,20 +193,17 @@ Extension | Notes
 
 ## Integrated support for modland.com
 
-The file browser can list and play files from <https://modland.com>. Fetch the catalog once from `setup.dev` on the `modland.com:` drive before any module directories appear.
+The file browser can list and play files from <https://modland.com>. `wasm/build.sh` downloads Modland's `allmods.zip` and builds `CPMDLAND.DAT` with the player's catalog writer. That file is packed into `ocp.data`. The browser loads it on startup and does not parse the listing. A later visit uses the copy stored in this browser.
 
-On a desktop build that download uses `curl`. In the browser build the same dialog downloads `allmods.zip` from the selected mirror. The default mirror is `https://modland.com/allmods.zip` (about 5.7 MB). That host sends `Access-Control-Allow-Origin: *`, so the page can fetch it.
+On a desktop build the listing is fetched with `curl` from `setup.dev`. In the browser, **Refresh database** on that dialog downloads a new `allmods.zip` from the mirror and parses it. The default mirror is `https://modland.com/` (the catalog URL is `https://modland.com/allmods.zip`). That host sends `Access-Control-Allow-Origin: *`, so the page can fetch a module.
 
 ### Browser file selector
 
-1. Move to the `modland.com` drive and press Enter. The path changes to `modland.com:/*`.
-2. The highlight then sits on the `file:` drive, the place you just left. Enter on that row returns to `file:/*`. `setup.dev` is the row above the highlight. Until the database is fetched, that is the only Modland entry.
-3. Press Up so `setup.dev` is highlighted, then Enter.
-4. The dialog opens on **1. Select mirror**. Press Down and Enter on **2. Fetch database**. After a database is stored, that line reads **2. Refresh database**.
-5. Wait for the download and the parse to finish, then press Esc.
-6. Format directories are listed under `modland.com:`. Open a directory, then a file. Opening a file downloads that module from the mirror.
+1. Open the `modland.com` drive. Format directories are listed from the catalog built with the page.
+2. Open a directory, then a file. Opening a file downloads that module from the mirror.
+3. To replace the stored catalog, highlight `setup.dev`, press Enter, and choose **2. Refresh database**.
 
-The database is stored in this browser at `/home/web_user/.ocp/data/`. The page writes that directory through IndexedDB. Closing the tab can drop the last write. `modland.wasm` has to be present on the host for the drive to appear. That file is covered in `wasm/HOSTING.md`.
+The database is stored in this browser at `/home/web_user/.ocp/data/`. The page writes that directory through IndexedDB. Closing the tab can drop the last write. `modland.wasm` has to be present on the host. Hosting is covered in `wasm/HOSTING.md`.
 
 ## Manual Page
 

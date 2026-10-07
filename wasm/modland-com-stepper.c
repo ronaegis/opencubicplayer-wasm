@@ -208,6 +208,130 @@ void modland_com_wipecache_Run(const struct DevInterfaceAPI_t *API)
 	modland_com_update_stepper_state();
 }
 
+/* Copy the catalog produced by wasm/modland-makedb.c. Parsing happens at build time. */
+static int wasm_modland_seed_decided;
+
+extern int idbfs_sync_in_progress(void);
+extern int idbfs_sync_data_immediate(void);
+extern void wasm_modland_register_seed(int (*tick)(const struct DevInterfaceAPI_t *API));
+
+static int wasm_modland_dat_is_valid(const struct configAPI_t *config)
+{
+	char path[512];
+	FILE *f;
+	char sig[60];
+	size_t n;
+
+	if (!config || !config->DataHomePath)
+	{
+		return 0;
+	}
+	if (snprintf(path, sizeof(path), "%sCPMDLAND.DAT", config->DataHomePath) >= (int)sizeof(path))
+	{
+		return 0;
+	}
+	f = fopen(path, "rb");
+	if (!f)
+	{
+		return 0;
+	}
+	n = fread(sig, 1, sizeof(sig), f);
+	fclose(f);
+	return n == sizeof(sig) && memcmp(sig, dbsig, sizeof(dbsig)) == 0;
+}
+
+static int wasm_modland_install_prebuilt(const struct configAPI_t *config)
+{
+	const char *src_path = "/modland/CPMDLAND.DAT";
+	char dst[512];
+	FILE *in;
+	FILE *out;
+	char buf[65536];
+	size_t n;
+
+	if (!config || !config->DataHomePath)
+	{
+		return -1;
+	}
+	in = fopen(src_path, "rb");
+	if (!in)
+	{
+		fprintf(stderr, "WASM: No prebuilt Modland catalog\n");
+		return -1;
+	}
+	if (snprintf(dst, sizeof(dst), "%sCPMDLAND.DAT", config->DataHomePath) >= (int)sizeof(dst))
+	{
+		fclose(in);
+		return -1;
+	}
+	modland_com_filedb_close();
+	out = fopen(dst, "wb");
+	if (!out)
+	{
+		fclose(in);
+		fprintf(stderr, "WASM: Cannot write %s\n", dst);
+		return -1;
+	}
+	while ((n = fread(buf, 1, sizeof(buf), in)) > 0)
+	{
+		if (fwrite(buf, 1, n, out) != n)
+		{
+			fclose(in);
+			fclose(out);
+			return -1;
+		}
+	}
+	fclose(in);
+	if (fclose(out))
+	{
+		return -1;
+	}
+	modland_com_filedb_load(config);
+	if (modland_com_sort() || modland_com.database.fileentries_n == 0)
+	{
+		return -1;
+	}
+	fprintf(stderr, "WASM: Modland catalog ready (%u files)\n", modland_com.database.fileentries_n);
+	idbfs_sync_data_immediate();
+	return 0;
+}
+
+static int wasm_modland_seed_drive(const struct DevInterfaceAPI_t *API)
+{
+	if (wasm_modland_seed_decided)
+	{
+		return 0;
+	}
+	if (idbfs_sync_in_progress())
+	{
+		return 0;
+	}
+	wasm_modland_seed_decided = 1;
+	if (wasm_modland_dat_is_valid(API->configAPI))
+	{
+		/* Plugin init can run before IndexedDB populate. */
+		if (modland_com.database.fileentries_n == 0)
+		{
+			fprintf(stderr, "WASM: Reloading Modland catalog from IndexedDB\n");
+			modland_com_filedb_close();
+			modland_com_filedb_load(API->configAPI);
+			modland_com_sort();
+		}
+		if (modland_com.database.fileentries_n > 0)
+		{
+			fprintf(stderr, "WASM: Modland catalog already stored\n");
+			wasm_modland_register_seed(NULL);
+			return 0;
+		}
+	}
+	if (wasm_modland_install_prebuilt(API->configAPI))
+	{
+		fprintf(stderr, "WASM: Modland catalog was not installed\n");
+	}
+	wasm_modland_register_seed(NULL);
+	return 0;
+}
+
 #else /* !OCP_WASM_FILESEL_STEPPER */
 
 /* Desktop build: use original blocking implementations */
@@ -252,6 +376,7 @@ int modland_com_init(struct PluginInitAPI_t *API)
 		wasm_modland_patch_virtual_interface_runs();
 
 		modland_com_update_stepper_state();
+		wasm_modland_register_seed(wasm_modland_seed_drive);
 	}
 	else
 	{
