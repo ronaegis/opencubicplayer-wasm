@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM Download Wrapper
- * Copyright (c) 2025 - WASM port using Emscripten fetch API
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port using Emscripten fetch API
  *
  * This is a WASM-compatible implementation of filesel/download.c
  * It replaces curl process spawning with Emscripten's fetch API

@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM Stubs
- * Copyright (c) 2025 - WASM port stubs for original DOS interface
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port stubs for original DOS interface
  *
  * This file contains stubs for functionality that is not available or needed in WASM
  * These stubs allow us to use the original DOS interface files without modification

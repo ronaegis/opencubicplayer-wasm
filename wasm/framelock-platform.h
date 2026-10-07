@@ -1,5 +1,5 @@
 /* OpenCP Module Player - Platform Framelock API
- * Copyright (c) 2025 - Cross-platform timing abstraction
+ * Copyright (c) 2025-2026 Christophe Thibault - Cross-platform timing abstraction
  *
  * This header defines platform-specific hooks for framelock timing.
  * Each platform (Unix, Windows, WASM) provides its own implementation.

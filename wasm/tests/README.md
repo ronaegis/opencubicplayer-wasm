@@ -32,7 +32,6 @@ wasm/tests/
 ├── test-audio.js             # Audio output tests
 ├── test-*.html               # Browser-based test pages
 ├── Makefile                  # Make commands for easy testing
-├── ci-integration.yml        # GitHub Actions workflow
 └── README.md                 # This file
 ```
 
@@ -141,7 +140,7 @@ make status           # Show environment status
 
 ## Workflow file
 
-`ci-integration.yml` in this directory is a draft. The workflow that GitHub Actions loads is `.github/workflows/ocp-wasm-tests.yml`. It does not post pull-request comments. A green run is a property of a commit on GitHub, not of this README.
+GitHub Actions runs `.github/workflows/ocp-wasm-tests.yml` on every push to the release branch and on pull requests. It builds with Emscripten 5.0.2, installs the test dependencies from `package-lock.json` with `npm ci`, runs `npm test`, and uploads the site files as a build artifact. It does not post pull-request comments.
 
 ## Output Formats
 

@@ -1,5 +1,5 @@
 /* OpenCP Module Player - fsSetup Stepper for WASM
- * Copyright (c) 2025 - Non-blocking setup dialog
+ * Copyright (c) 2025-2026 Christophe Thibault - Non-blocking setup dialog
  *
  * This header provides the stepper infrastructure for fsSetup() dialog,
  * allowing it to run without blocking the browser.

@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM File I/O Implementation
- * Copyright (c) 2025 - WASM port file operations
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port file operations
  *
  * This file implements file operations for the WASM version using Emscripten's
  * virtual file system

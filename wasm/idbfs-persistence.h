@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM IDBFS Persistence
- * Copyright (c) 2025 - WASM port with IndexedDB persistence
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port with IndexedDB persistence
  *
  * This file provides IndexedDB-backed filesystem (IDBFS) persistence
  * for configuration and cached data across browser sessions.

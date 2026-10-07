@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM IDBFS Persistence Implementation
- * Copyright (c) 2025 - WASM port with IndexedDB persistence
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port with IndexedDB persistence
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

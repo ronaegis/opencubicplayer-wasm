@@ -1,5 +1,5 @@
 /* OpenCP Module Player - fsSetup Stepper Implementation
- * Copyright (c) 2025 - Non-blocking setup dialog for WASM
+ * Copyright (c) 2025-2026 Christophe Thibault - Non-blocking setup dialog for WASM
  *
  * This file provides a non-blocking version of fsSetup() that yields
  * to the browser after each frame, preventing the hang when ALT-C is pressed.

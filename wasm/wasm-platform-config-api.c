@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM Platform Configuration JavaScript API
- * Copyright (c) 2025 - JavaScript-accessible configuration API
+ * Copyright (c) 2025-2026 Christophe Thibault - JavaScript-accessible configuration API
  *
  * This file exports functions that allow JavaScript to configure
  * WASM platform behavior at runtime (paths, timing, etc.).

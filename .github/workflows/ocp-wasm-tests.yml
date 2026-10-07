@@ -31,10 +31,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: wasm/tests/package-lock.json
 
       - name: Test
         working-directory: wasm/tests
-        run: npm install && npm test
+        run: npm ci && npm test
 
       - name: Upload build
         uses: actions/upload-artifact@v4

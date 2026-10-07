@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM Platform Config/Path Implementation
- * Copyright (c) 2025 - WASM port with configurable virtual FS paths
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port with configurable virtual FS paths
  *
  * This file provides WASM-specific implementations for config paths,
  * allowing the browser front-end to configure paths through supported APIs.

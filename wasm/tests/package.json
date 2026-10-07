@@ -18,14 +18,14 @@
     "setup": "npm install"
   },
   "dependencies": {
-    "puppeteer": "^24.0.0",
     "chalk": "^4.1.2",
     "commander": "^12.0.0",
     "express": "^4.21.0",
+    "puppeteer": "^25.12.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "jest": "^30.5.2"
   },
   "keywords": [
     "opencubicplayer",

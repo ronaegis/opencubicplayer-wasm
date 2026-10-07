@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM File I/O Header
- * Copyright (c) 2025 - WASM port file operations
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port file operations
  */
 
 #ifndef WASM_FILEIO_H

@@ -1,5 +1,5 @@
 /* OpenCP Module Player - Platform Config/Path API
- * Copyright (c) 2025 - Cross-platform path configuration
+ * Copyright (c) 2025-2026 Christophe Thibault - Cross-platform path configuration
  *
  * This header defines platform-specific hooks for config paths.
  * Each platform (Unix, Windows, WASM) provides its own implementation.

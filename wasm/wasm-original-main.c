@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM Main Entry Point
- * Copyright (c) 2025 - WASM port using original DOS interface
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port using original DOS interface
  *
  * This file creates a WASM main entry point that uses the original
  * OpenCubicPlayer DOS interface files with minimal modifications

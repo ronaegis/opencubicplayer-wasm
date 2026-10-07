@@ -139,9 +139,9 @@ Set the content type of every `.wasm` object to `application/wasm` at upload tim
 
 ## What the browser loads
 
-1. `index.html` loads `ocp.js?v=10`.
-2. `locateFile` in that page loads `ocp.wasm` and `ocp.data`, and appends `?v=10`.
-3. The page fetches every `url` in `wasmPluginManifest`, appends `?v=10`, and writes the bytes to `/program/autoload/<name>.wasm` in the in-browser filesystem.
+1. `index.html` loads `ocp.js?v=13`.
+2. `locateFile` in that page loads `ocp.wasm` and `ocp.data`, and appends `?v=13`.
+3. The page fetches every `url` in `wasmPluginManifest`, appends `?v=13`, and writes the bytes to `/program/autoload/<name>.wasm` in the in-browser filesystem.
 4. `wasm_start_ocp` loads every side module in that directory.
 5. The page fetches `sample-files/manifest.json` with `cache: 'no-cache'`. A missing manifest is a console warning. The player still starts, and the demo songs are absent. "Open a module from this computer" still works.
 
@@ -226,7 +226,7 @@ Audio CD, MusicBrainz lookups, gzip, tar, bzip2, and pak archives, the cube visu
 ## Replacing a published build
 
 1. Run `./wasm/build.sh` with the same Emscripten version.
-2. In `wasm/index.html`, raise the same token in all three places: `fetch(plugin.url + '?v=10')`, the `?v=10` appended by `locateFile` for `.wasm` and `.data`, and `<script src="ocp.js?v=10">`.
+2. In `wasm/index.html`, raise the same token in all three places: `fetch(plugin.url + '?v=13')`, the `?v=13` appended by `locateFile` for `.wasm` and `.data`, and `<script src="ocp.js?v=13">`.
 3. Upload `index.html` together with `ocp.js`, `ocp.wasm`, `ocp.data`, and every side module from that build.
 4. In the browser network panel, `ocp.wasm` and each listed plugin return 200. The status line reaches ready. Open one file from the selector, and open one demo entry when `sample-files/` is part of the upload.
 

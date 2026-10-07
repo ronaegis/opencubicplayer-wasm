@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM Platform Framelock Implementation
- * Copyright (c) 2025 - WASM port with configurable timing
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port with configurable timing
  *
  * This file provides WASM-specific implementations for framelock timing,
  * allowing the browser to drive rendering without sleep/gettimeofday.

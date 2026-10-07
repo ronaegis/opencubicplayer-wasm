@@ -1,6 +1,6 @@
 # WASM Architecture Overview
 
-**Last updated:** October 23, 2025
+**Last updated:** October 7, 2026
 **Status:** Experimental browser port. See wasm/README.md for what the build actually does.
 
 ---

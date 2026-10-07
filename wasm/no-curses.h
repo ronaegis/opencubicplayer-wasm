@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM no-curses.h stub
- * Copyright (c) 2025 - WASM port
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port
  *
  * This file provides stubs for curses functionality that is not available in WASM
  */

@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM Config Wrapper
- * Copyright (c) 2025 - WASM port with IDBFS persistence
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port with IDBFS persistence
  *
  * This file wraps the config save operation to trigger IDBFS sync
  * after configuration changes are written to disk.

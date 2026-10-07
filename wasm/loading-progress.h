@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM Loading Progress Reporter
- * Copyright (c) 2025 - Reports plugin loading status to JavaScript
+ * Copyright (c) 2025-2026 Christophe Thibault - Reports plugin loading status to JavaScript
  */
 
 #ifndef WASM_LOADING_PROGRESS_H

@@ -22,7 +22,7 @@ Production flags from `CMakeLists.txt`: `-O3`, assertions off, `INITIAL_MEMORY` 
 
 The script writes `build/ocp.js`, `build/ocp.wasm`, `build/ocp.data`, one `.wasm` side module per plugin, `index.html`, `visitor-file.js`, `COPYING`, and `UNIFONT-LICENSE.txt`.
 
-`ocp.data` is the GNU Unifont file and the help database. It does not contain sample music.
+`ocp.data` is the GNU Unifont file, the help database, `adplug.db`, and the prebuilt Modland catalog. It does not contain sample music.
 
 Serve the build directory over HTTP. Opening the HTML from `file://` will not start the module.
 

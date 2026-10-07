@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM Framelock Implementation
- * Copyright (c) 2025 - WASM port using platform callbacks
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM port using platform callbacks
  *
  * This file provides framelock implementation for WASM that:
  * - Uses browser-driven timing instead of sleep/gettimeofday

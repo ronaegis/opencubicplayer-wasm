@@ -1,5 +1,5 @@
 /* OpenCP Module Player - WASM wrapper for playopl
- * Copyright (c) 2025 - WASM-specific .bnk file fallback handling
+ * Copyright (c) 2025-2026 Christophe Thibault - WASM-specific .bnk file fallback handling
  *
  * This wrapper intercepts file loading to provide fallback paths for .bnk files,
  * enabling on-demand loading from /music/ directory without modifying the original file.
