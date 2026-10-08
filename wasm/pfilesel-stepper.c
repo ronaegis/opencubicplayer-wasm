@@ -164,11 +164,6 @@ int fsFileSelectIsActive(void)
  * This version starts a stepper that runs from the file selector main loop.
  */
 
-/* Check if setup stepper is active */
-static int fsSetup_is_stepper_active(void)
-{
-	return fsSetup_stepper_is_active(fsSetup_stepper_get_engine());
-}
 
 void fsSetup(void)
 {

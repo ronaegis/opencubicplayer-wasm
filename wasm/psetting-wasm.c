@@ -37,7 +37,9 @@ static int wasm_StoreConfig(void)
 
 	if (result == 0) {
 		/* Config saved successfully - trigger IDBFS sync */
+#ifdef OCP_WASM_DEBUG_LOGGING
 		fprintf(stderr, "WASM: Config saved, marking for IDBFS sync\n");
+#endif
 		idbfs_mark_dirty_config();
 	}
 

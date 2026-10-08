@@ -220,8 +220,7 @@ static int sid_dialog_handle_key(void *state, int key, const struct DevInterface
 
 		case KEY_EXIT:
 		case KEY_ESC:
-			API->configAPI->StoreConfig();
-			return 1; /* Exit dialog */
+			return 1; /* Exit dialog. Cleanup applies the values and stores them. */
 	}
 
 	return 0; /* Continue dialog */

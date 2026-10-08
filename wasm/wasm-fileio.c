@@ -161,7 +161,10 @@ struct wasm_filehandle_t {
 // WASM file operations
 static int wasm_file_read(struct ocpfilehandle_t *_file, void *dst, int len) {
     struct wasm_filehandle_t *file = (struct wasm_filehandle_t *)_file;
-    return fread(dst, 1, len, file->fp);
+    if (len <= 0) {
+        return 0;
+    }
+    return (int)fread(dst, 1, (size_t)len, file->fp);
 }
 
 static int wasm_file_eof(struct ocpfilehandle_t *_file) {
@@ -256,9 +259,16 @@ struct ocpfilehandle_t *wasm_file_open_readfile(const char *path) {
     }
 
     // Get file size
-    fseek(fp, 0, SEEK_END);
-    long filesize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    long filesize = -1;
+    if (fseek(fp, 0, SEEK_END) == 0) {
+        filesize = ftell(fp);
+    }
+    if (filesize < 0 || fseek(fp, 0, SEEK_SET) != 0) {
+        fprintf(stderr, "WASM: Unable to size %s\n", open_path);
+        fclose(fp);
+        free(normalized);
+        return NULL;
+    }
 
     // Extract filename from path
     const char *filename = strrchr(open_path, '/');
@@ -328,100 +338,7 @@ extern struct cpifaceSessionPrivate_t cpifaceSessionAPI;
 // Global XM module - this is now defined in xmpplay.c
 extern OCP_INTERNAL struct xmodule mod;
 
-// Global state for current loaded file
-static struct ocpfilehandle_t *g_current_file = NULL;
-static const struct interfacestruct *g_current_interface = NULL;
-static const struct cpifaceplayerstruct *g_current_cp = NULL;
-static int g_is_loaded = 0;
 int g_is_playing = 0;
-
-
-// Playback control functions for JavaScript interface
-EMSCRIPTEN_KEEPALIVE
-void play() {
-    printf("=== WASM play() function called ===\n");
-
-    if (!g_is_loaded) {
-        printf("play() aborted - no file loaded\n");
-        return;
-    }
-
-    // Check if we have both MCP and PLR APIs
-    extern const struct plrDevAPI_t *plrDevAPI;
-
-    // Start playback on the audio device first
-    printf("WASM: Starting audio playback...\n");
-    printf("WASM: plrDevAPI = %p\n", (void*)plrDevAPI);
-    if (plrDevAPI) {
-        printf("WASM: plrDevAPI->Play = %p\n", (void*)plrDevAPI->Play);
-    }
-
-    if (plrDevAPI) {
-        if (!cpifaceSessionAPI.Public.plrActive && plrDevAPI->Play) {
-            uint32_t rate = 44100;
-            enum plrRequestFormat format = PLR_STEREO_16BIT_SIGNED;
-            printf("WASM: Calling plrDevAPI->Play with rate=%u, format=%d\n", rate, format);
-            int result = plrDevAPI->Play(&rate, &format, g_current_file, &cpifaceSessionAPI.Public);
-            printf("WASM: plrDevAPI->Play returned %d, final rate=%u\n", result, rate);
-            if (result) {
-                wasm_plr_note_output_rate(rate);
-            }
-            if (!result) {
-                printf("plrDevAPI->Play failed\n");
-            }
-        } else {
-            printf("WASM: skipping plrDevAPI->Play (plrActive=%d, Play=%p)\n",
-                    cpifaceSessionAPI.Public.plrActive,
-                    plrDevAPI->Play);
-        }
-    } else {
-        printf("plrDevAPI is unavailable (plrDevAPI=%p, Play=%p)\n",
-            (void*)plrDevAPI, plrDevAPI ? (void*)plrDevAPI->Play : NULL);
-    }
-
-    // Check if MCP player was properly initialized by the MOD player's Init()
-    if (cpifaceSessionAPI.Public.mcpDevAPI) {
-        // The MOD player's Init() should have already called mcpDevAPI->OpenPlayer()
-        // We don't need to call it again here - that would be a double initialization
-    } else {
-        printf("mcpDevAPI is NULL - MOD player Init() may have failed\n");
-    }
-
-    // Then unpause the MCP system
-    if (cpifaceSessionAPI.Public.mcpDevAPI) {
-        cpifaceSessionAPI.Public.mcpSet(&cpifaceSessionAPI.Public, -1, mcpMasterPause, 0);
-        g_is_playing = 1;
-    } else {
-        printf("Unable to resume playback - mcpDevAPI is NULL\n");
-    }
-}
-
-EMSCRIPTEN_KEEPALIVE
-void pause_playback() {
-    if (!g_is_loaded) {
-        return;
-    }
-
-    // Use OCP pause system
-    if (cpifaceSessionAPI.Public.mcpDevAPI) {
-        cpifaceSessionAPI.Public.mcpSet(&cpifaceSessionAPI.Public, -1, mcpMasterPause, 1);
-        g_is_playing = 0;
-    }
-}
-
-EMSCRIPTEN_KEEPALIVE
-void stop() {
-    if (!g_is_loaded) {
-        return;
-    }
-
-    if (g_is_playing && g_current_interface && g_current_interface->Close) {
-        // Close the file through the OCP system
-        g_current_interface->Close();
-        g_is_playing = 0;
-        g_is_loaded = 0;
-    }
-}
 
 // Function to write data from JavaScript to virtual filesystem
 EMSCRIPTEN_KEEPALIVE

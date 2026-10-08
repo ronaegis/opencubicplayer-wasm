@@ -64,7 +64,5 @@ target_compile_definitions(playogg-module PRIVATE
     OPENCUBICPLAYER_DATADIR="/assets"
     HAVE_SDL2=1
     OCP_MAJOR_VERSION=3
-    OCP_MINOR_VERSION=0
-    OCP_PATCH_VERSION=1
     VERSION="3.0.1-WASM"
 )

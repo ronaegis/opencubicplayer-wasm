@@ -62,13 +62,13 @@ EM_JS(int, wasm_apply_sample_metadata_from_manifest, (), {
 
 		// Allocate strings on WASM heap
 		var pathPtr = stringToNewUTF8(info.fsPath);
-		var modtypePtr = stringToNewUTF8(info.modtype || '');
-		var titlePtr = stringToNewUTF8(info.title || '');
-		var composerPtr = stringToNewUTF8(info.composer || '');
-		var artistPtr = stringToNewUTF8(info.artist || '');
-		var stylePtr = stringToNewUTF8(info.style || '');
-		var commentPtr = stringToNewUTF8(info.comment || '');
-		var albumPtr = stringToNewUTF8(info.album || '');
+		var modtypePtr = stringToNewUTF8(info.modtype || "");
+		var titlePtr = stringToNewUTF8(info.title || "");
+		var composerPtr = stringToNewUTF8(info.composer || "");
+		var artistPtr = stringToNewUTF8(info.artist || "");
+		var stylePtr = stringToNewUTF8(info.style || "");
+		var commentPtr = stringToNewUTF8(info.comment || "");
+		var albumPtr = stringToNewUTF8(info.album || "");
 
 		var result = _wasm_set_sample_metadata(
 			pathPtr,

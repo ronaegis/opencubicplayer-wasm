@@ -8,6 +8,8 @@
 #include <emscripten/emscripten.h>
 #include <string.h>
 
+#include "loading-progress.h"
+
 EM_JS(int, wasm_sync_download_js, (const char *url, const char *dest_path), {
   var u = UTF8ToString(url);
   var p = UTF8ToString(dest_path);
@@ -67,7 +69,8 @@ EM_JS(int, wasm_sync_download_js, (const char *url, const char *dest_path), {
       // overrideMimeType may not exist; ignore
     }
     xhr.send(null);
-    if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 0) {
+    // Status 0 is a network or CORS failure, not a hit.
+    if (xhr.status >= 200 && xhr.status < 300) {
       var data = null;
       if (xhr.response && xhr.response.byteLength !== undefined) {
         data = new Uint8Array(xhr.response);
@@ -79,6 +82,10 @@ EM_JS(int, wasm_sync_download_js, (const char *url, const char *dest_path), {
         }
       } else {
         console.error('wasm_sync_download_js: unsupported response type for', u);
+        return -1;
+      }
+      if (data.length === 0) {
+        console.error('wasm_sync_download_js: empty body for', u);
         return -1;
       }
       try {
@@ -110,6 +117,8 @@ int wasm_sync_download_to_file(const char *url, const char *dest_path)
   int rc = wasm_sync_download_js(url, dest_path);
   if (rc == 0) {
     idbfs_mark_dirty_data();
+  } else {
+    wasm_report_page_notice("Download failed. Check the network connection and try again.");
   }
   return rc;
 }

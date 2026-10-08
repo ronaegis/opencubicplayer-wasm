@@ -132,123 +132,48 @@ describe('cpiface-wrapper validation', () => {
     expect(fs.existsSync(cpifaceWrapperObj)).toBe(true);
   });
 
+
+function objectContainsSymbol(buf, name) {
+  const bytes = Buffer.from(name, 'utf8');
+  if (bytes.length === 0 || bytes.length > 127) {
+    throw new Error('symbol name is too long for a single length byte: ' + name);
+  }
+  const prefixed = Buffer.concat([Buffer.from([bytes.length]), bytes]);
+  return buf.includes(prefixed);
+}
+
+function readSymbolObject(file) {
+  if (!fs.existsSync(file)) {
+    throw new Error('missing object ' + file);
+  }
+  const buf = fs.readFileSync(file);
+  if (buf.length < 64) {
+    throw new Error('object too small to contain symbols: ' + file + ' (' + buf.length + ' bytes)');
+  }
+  return buf;
+}
+
   test('required symbols are exported', () => {
-    // This test is informational - the compile-time validation is more reliable
-    // Since WASM tools may not be available and symbols may be internalized/optimized
-
-    let symbolOutput = '';
-    let toolAvailable = false;
-
-    // Try wasm-objdump first (if available)
-    try {
-      symbolOutput = execSync(`wasm-objdump -x "${wasmFile}" 2>/dev/null || true`,
-        { encoding: 'utf8' });
-      if (symbolOutput.length > 100) {
-        toolAvailable = true;
-      }
-    } catch (e) {
-      // Fallback: check object files with nm
-      try {
-        symbolOutput = execSync(`nm "${cpifaceWrapperObj}" 2>/dev/null || true`,
-          { encoding: 'utf8' });
-        if (symbolOutput.length > 100) {
-          toolAvailable = true;
-        }
-      } catch (e2) {
-        // If both fail, skip test
-        console.warn('Warning: Neither wasm-objdump nor nm available, skipping symbol export check');
-        console.warn('This is OK - compile-time validation ensures symbols exist');
-        return;
-      }
-    }
-
-    if (!toolAvailable) {
-      console.warn('Warning: Symbol inspection tools not producing output, skipping check');
-      console.warn('This is OK - compile-time validation ensures symbols exist');
-      return;
-    }
-
-    const missingSymbols = [];
-    for (const sym of requiredExports) {
-      if (!symbolOutput.includes(sym)) {
-        missingSymbols.push(sym);
-      }
-    }
-
-    if (missingSymbols.length > 0) {
-      console.warn('Note: Some symbols not found in WASM output:', missingSymbols);
-      console.warn('This may be OK - they might be internalized or the build passed already');
-    }
-
-    // Don't fail the test - this is informational only
-    // The compile-time validation and successful build are more reliable
+    const buf = readSymbolObject(cpifaceWrapperObj);
+    const missingSymbols = requiredExports.filter((sym) => !objectContainsSymbol(buf, sym));
+    expect(missingSymbols).toEqual([]);
   });
 
   test('original symbols are properly renamed', () => {
-    let nmOutput = '';
-
-    try {
-      nmOutput = execSync(`nm "${cpifaceWrapperObj}" 2>/dev/null`, { encoding: 'utf8' });
-    } catch (e) {
-      console.warn('Warning: nm not available, skipping rename check');
-      return;
-    }
-
-    const unrenamedSymbols = [];
-    for (const sym of forbiddenSymbols) {
-      // Check if symbol appears WITHOUT the cpiface_original prefix
-      const lines = nmOutput.split('\n');
-      for (const line of lines) {
-        // Match symbol name at end of line (nm format: "address type symbol")
-        if (line.match(new RegExp(`\\s${sym}$`)) &&
-            !line.includes('cpiface_original')) {
-          unrenamedSymbols.push(sym);
-          break;
-        }
-      }
-    }
-
-    if (unrenamedSymbols.length > 0) {
-      console.error('Found unrenamed symbols (should have cpiface_original_ prefix):', unrenamedSymbols);
-    }
+    const buf = readSymbolObject(cpifaceWrapperObj);
+    const unrenamedSymbols = forbiddenSymbols.filter((sym) => objectContainsSymbol(buf, sym));
     expect(unrenamedSymbols).toEqual([]);
   });
 
   test('renamed symbols exist in object file', () => {
-    let nmOutput = '';
-
-    try {
-      nmOutput = execSync(`nm "${cpifaceWrapperObj}" 2>/dev/null`, { encoding: 'utf8' });
-    } catch (e) {
-      console.warn('Warning: nm not available, skipping renamed symbol check');
-      return;
-    }
-
-    const missingRenamed = [];
-    const inlinedSymbols = [];
-    for (const sym of renamedSymbols) {
-      if (!nmOutput.includes(sym)) {
-        missingRenamed.push(sym);
-        // Check if this might be inlined (functions that are called but small,
-        // or functions that are only referenced but not called directly)
-        if (sym.includes('OpenScreen') || sym.includes('CloseScreen') || sym.includes('cpiDebugRun')) {
-          inlinedSymbols.push(sym);
-        }
-      }
-    }
-
-    if (inlinedSymbols.length > 0) {
-      console.warn('Note: Some symbols may have been inlined by compiler:', inlinedSymbols);
-      console.warn('This is OK - compile-time validation ensures they exist in source');
-    }
-
-    // Filter out likely inlined symbols from the missing list
-    const actuallyMissing = missingRenamed.filter(sym => !inlinedSymbols.includes(sym));
-
-    if (actuallyMissing.length > 0) {
-      console.error('Missing renamed symbols (not inlined):', actuallyMissing);
-    }
-    expect(actuallyMissing).toEqual([]);
+    const buf = readSymbolObject(cpifaceWrapperObj);
+    const inlined = new Set([
+      'cpiface_original_plmpOpenScreen',
+      'cpiface_original_plmpCloseScreen',
+      'cpiface_original_cpiDebugRun',
+    ]);
+    const missingRenamed = renamedSymbols.filter((sym) => !objectContainsSymbol(buf, sym) && !inlined.has(sym));
+    expect(missingRenamed).toEqual([]);
   });
 
   test('no new unwrapped static functions in cpiface.c', () => {
@@ -322,6 +247,5 @@ describe('cpiface-wrapper validation', () => {
 
     // Check for runtime validation in wasm_plmpLateInit
     expect(wrapperSource).toMatch(/Circular reference detected/);
-    expect(wrapperSource).toMatch(/cpiface_original_plmpLateInit is NULL/);
   });
 });

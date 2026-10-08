@@ -85,40 +85,6 @@ int load_module_file_interface(const char *virtual_path) {
     return 0;
 }
 
-EMSCRIPTEN_KEEPALIVE
-void stop_interface(void) {
-    should_stop = 1;
-    interface_state = interfaceReturnQuit;
-}
-
-EMSCRIPTEN_KEEPALIVE
-void pause_interface(void) {
-    if (current_interface) {
-        // The interface will handle pause internally via keyboard input
-        // We can inject a pause key event here
-    }
-}
-
-EMSCRIPTEN_KEEPALIVE
-void toggle_fullscreen_interface(void) {
-    // Handle fullscreen toggle like desktop platforms
-    EmscriptenFullscreenChangeEvent fullscreenStatus;
-    if (emscripten_get_fullscreen_status(&fullscreenStatus) == EMSCRIPTEN_RESULT_SUCCESS) {
-		if (fullscreenStatus.isFullscreen) {
-			// Exit fullscreen
-			emscripten_exit_fullscreen();
-		} else {
-            // Enter fullscreen
-            EmscriptenFullscreenStrategy strategy;
-            strategy.scaleMode = EMSCRIPTEN_FULLSCREEN_CANVAS_SCALE_STDDEF;
-            strategy.canvasResolutionScaleMode = EMSCRIPTEN_FULLSCREEN_CANVAS_SCALE_STDDEF;
-            strategy.filteringMode = EMSCRIPTEN_FULLSCREEN_FILTERING_DEFAULT;
-
-			emscripten_request_fullscreen_strategy("#canvas", EM_TRUE, &strategy);
-		}
-	}
-}
-
 static int wasm_interface_finalize_init(void) {
 	// CRITICAL: Initialize text mode system and activate pattern view
 	// First ensure text mode is properly initialized
@@ -152,21 +118,10 @@ int wasm_interface_load_from_handle(const struct moduleinfostruct *info,
                                     const struct interfacestruct *interface,
                                     const struct cpifaceplayerstruct *player)
 {
-    const char *display_name = "(unknown)";
-
 	if (!filehandle || !interface) {
 		fprintf(stderr, "WASM: Invalid arguments passed to wasm_interface_load_from_handle\n");
 		return -1;
 	}
-
-    if (info && info->title[0]) {
-        display_name = info->title;
-    } else if (filehandle->filename_override) {
-        const char *override = filehandle->filename_override(filehandle);
-        if (override && override[0]) {
-            display_name = override;
-        }
-    }
 
     // Close any existing interface first
     if (interface_initialized) {
@@ -465,7 +420,7 @@ static EM_BOOL wasm_fullscreen_change_handler(int eventType, const EmscriptenFul
 
 // Detect initial resolution and setup resize handling
 static void wasm_detect_initial_resolution(void) {
-	int canvasWidth, canvasHeight, isFullscreen;
+	int canvasWidth, canvasHeight;
 
 	// Get initial canvas size
 	if (emscripten_get_canvas_element_size("#canvas", &canvasWidth, &canvasHeight) != EMSCRIPTEN_RESULT_SUCCESS) {
@@ -512,10 +467,6 @@ int wasm_interface_init(void) {
     // Set up adaptive canvas resizing
     wasm_detect_initial_resolution();
 
-    // Register the XM/MOD player types
-    struct PluginInitAPI_t dummy_api = {0}; // We'll fill this properly if needed
-    // xmTypeInit(&dummy_api); // This would register MOD/XM types
-
     return 0;
 }
 
@@ -523,13 +474,3 @@ int wasm_interface_init(void) {
 void wasm_interface_start(void) {
 }
 
-// Cleanup
-void wasm_interface_cleanup(void) {
-    if (interface_initialized) {
-        wasm_close_interface();
-    }
-
-    // Cleanup filesystem
-    fsClose();
-    fsLateClose();
-}

@@ -1,6 +1,7 @@
 # Build artifacts
 .emcache/
 .emcc-cache/
+.modland-cache/
 
 # CMake build files
 CMakeCache.txt

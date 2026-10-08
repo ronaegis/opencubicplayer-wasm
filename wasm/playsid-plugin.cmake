@@ -26,7 +26,8 @@ set(PLAYSID_RESIDFP_OUTPUT_DIR ${PLAYSID_GENERATED_DIR}/residfp)
 set(PLAYSID_GENERATED_FILES)
 
 # libresidfp and libsidplayfp now live in separate trees. Generate the
-# headers beside their .in files so quoted includes resolve on a fresh checkout.
+# headers in the build tree. Quoted includes search the source directory
+# first, so configure removes any source copies before they can shadow.
 set(HAVE_BUILTIN_EXPECT 1)
 set(RESIDFP_BRANCH_HINTS 1)
 set(RESIDFP_INLINING 1)
@@ -35,10 +36,25 @@ set(PACKAGE_VERSION "1.2.1")
 
 set(LIBRESIDFP_DIR ${CMAKE_SOURCE_DIR}/../playsid/libresidfp-git)
 set(LIBSIDPLAYFP_DIR ${CMAKE_SOURCE_DIR}/../playsid/libsidplayfp-git)
+set(PLAYSID_HEADER_DIR ${PLAYSID_GENERATED_DIR}/headers)
+
+# Quoted includes search the source directory first. Copies written there
+# survive a clean and shadow the generated headers.
+file(REMOVE
+    ${LIBRESIDFP_DIR}/src/siddefs-fp.h
+    ${LIBRESIDFP_DIR}/src/residfp/sidversion.h
+    ${LIBSIDPLAYFP_DIR}/src/sidplayfp/sidversion.h
+    ${LIBSIDPLAYFP_DIR}/src/builders/sidlite-builder/sidlite/sl_defs.h
+)
+file(MAKE_DIRECTORY
+    ${PLAYSID_HEADER_DIR}/residfp
+    ${PLAYSID_HEADER_DIR}/sidplayfp
+    ${PLAYSID_HEADER_DIR}/sidlite
+)
 
 configure_file(
     ${LIBRESIDFP_DIR}/src/siddefs-fp.h.in
-    ${LIBRESIDFP_DIR}/src/siddefs-fp.h
+    ${PLAYSID_HEADER_DIR}/siddefs-fp.h
     @ONLY
 )
 
@@ -47,7 +63,7 @@ set(LIB_MINOR 2)
 set(LIB_LEVEL 1)
 configure_file(
     ${LIBRESIDFP_DIR}/src/residfp/sidversion.h.in
-    ${LIBRESIDFP_DIR}/src/residfp/sidversion.h
+    ${PLAYSID_HEADER_DIR}/residfp/sidversion.h
     @ONLY
 )
 
@@ -56,21 +72,21 @@ set(LIB_MINOR 1)
 set(LIB_LEVEL 0)
 configure_file(
     ${LIBSIDPLAYFP_DIR}/src/sidplayfp/sidversion.h.in
-    ${LIBSIDPLAYFP_DIR}/src/sidplayfp/sidversion.h
+    ${PLAYSID_HEADER_DIR}/sidplayfp/sidversion.h
     @ONLY
 )
 
 configure_file(
     ${LIBSIDPLAYFP_DIR}/src/builders/sidlite-builder/sidlite/sl_defs.h.in
-    ${LIBSIDPLAYFP_DIR}/src/builders/sidlite-builder/sidlite/sl_defs.h
+    ${PLAYSID_HEADER_DIR}/sidlite/sl_defs.h
     @ONLY
 )
 
 list(APPEND PLAYSID_GENERATED_FILES
-    ${LIBRESIDFP_DIR}/src/siddefs-fp.h
-    ${LIBRESIDFP_DIR}/src/residfp/sidversion.h
-    ${LIBSIDPLAYFP_DIR}/src/sidplayfp/sidversion.h
-    ${LIBSIDPLAYFP_DIR}/src/builders/sidlite-builder/sidlite/sl_defs.h
+    ${PLAYSID_HEADER_DIR}/siddefs-fp.h
+    ${PLAYSID_HEADER_DIR}/residfp/sidversion.h
+    ${PLAYSID_HEADER_DIR}/sidplayfp/sidversion.h
+    ${PLAYSID_HEADER_DIR}/sidlite/sl_defs.h
 )
 
 set(PLAYSID_SIDTUNE_SOURCES
@@ -194,6 +210,8 @@ target_compile_options(playsid-module PRIVATE
 )
 
 target_include_directories(playsid-module BEFORE PRIVATE
+    ${PLAYSID_HEADER_DIR}
+    ${PLAYSID_HEADER_DIR}/sidlite
     ${PLAYSID_GENERATED_DIR}
     ${PLAYSID_SIDTUNE_OUTPUT_DIR}
     ${CMAKE_SOURCE_DIR}/sidplayfp-config
@@ -215,8 +233,6 @@ target_compile_definitions(playsid-module PRIVATE
     HAVE_SDL2=1
     HAVE_MKSTEMP=1
     OCP_MAJOR_VERSION=3
-    OCP_MINOR_VERSION=5
-    OCP_PATCH_VERSION=0
     VERSION="3.5.0+wasm.0.1.0"
     PACKAGE="libsidplayfp"
     PACKAGE_NAME="libsidplayfp"

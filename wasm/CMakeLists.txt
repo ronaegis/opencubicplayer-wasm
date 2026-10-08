@@ -53,6 +53,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Main module linker flags (core OCP with dynamic linking support)
 # Use MAIN_MODULE=1 to export all symbols including C++ stdlib for side modules
 # Memory: 16MB initial, grows as needed via ALLOW_MEMORY_GROWTH
+# dynCall_* names in EXPORTED_RUNTIME_METHODS must also appear in the
+# signatures array in index.html. wasm/tests/dyncall-list.test.js checks that.
 set(MAIN_MODULE_LINKER_FLAGS "\
     ${WASM_DEBUG_FLAGS} \
     -s WASM=1 \
@@ -67,11 +69,11 @@ set(MAIN_MODULE_LINKER_FLAGS "\
     -s DISABLE_EXCEPTION_CATCHING=0 \
     -s NO_EXIT_RUNTIME=1 \
     -lidbfs.js \
-    --allow-multiple-definition \
     ${WASM_ASSERTIONS_FLAG} \
     -s SAFE_HEAP=0 \
-    -sEXPORTED_FUNCTIONS='[\"_wasm_start_ocp\",\"_wasm_main_loop\",\"_load_module_file_interface\",\"_stop_interface\",\"_pause_interface\",\"_toggle_fullscreen_interface\",\"_play\",\"_pause_playback\",\"_stop\",\"_wasm_get_supported_extensions\",\"_wasm_get_virtual_device_stepper_active\",\"_wasm_set_virtual_device_stepper_active\",\"_wasm_sync_download_to_file\",\"_idbfs_sync_complete_callback\",\"_wasm_set_virtual_path\",\"_wasm_get_virtual_path\",\"_wasm_set_no_sleep_mode\",\"_wasm_get_no_sleep_mode\",\"_wasm_get_frame_count\",\"_wasm_force_frame_render\",\"_wasm_get_paths_json\",\"_main\",\"_malloc\",\"_free\"]' \
-    --preload-file ${CMAKE_SOURCE_DIR}/unifont-16.0.04.ttf@unifont-16.0.04.ttf")
+    -sEXPORTED_FUNCTIONS='[\"_wasm_start_ocp\",\"_wasm_startup_is_complete\",\"_wasm_main_loop\",\"_load_module_file_interface\",\"_wasm_get_virtual_device_stepper_active\",\"_wasm_set_virtual_device_stepper_active\",\"_wasm_sync_download_to_file\",\"_idbfs_sync_complete_callback\",\"_idbfs_flush\",\"_wasm_set_virtual_path\",\"_wasm_get_virtual_path\",\"_wasm_set_no_sleep_mode\",\"_wasm_get_no_sleep_mode\",\"_wasm_get_frame_count\",\"_wasm_force_frame_render\",\"_wasm_get_paths_json\",\"_main\",\"_malloc\",\"_free\"]' \
+    --preload-file ${CMAKE_SOURCE_DIR}/unifont-16.0.04.ttf@unifont-16.0.04.ttf \
+    --preload-file ${CMAKE_SOURCE_DIR}/ocp-default.ini@/assets/ocp.ini")
 
 # Conditionally add help database (adds ~45KB)
 if(WASM_INCLUDE_HELP)
@@ -372,8 +374,6 @@ target_compile_definitions(ocp-wasm PRIVATE
     OPENCUBICPLAYER_DATADIR="/assets"
     HAVE_SDL2=1
     OCP_MAJOR_VERSION=3
-    OCP_MINOR_VERSION=5
-    OCP_PATCH_VERSION=0
     VERSION="3.5.0+wasm.0.1.0"
     OCP_WASM_HAS_ZIP=1
     OCP_NO_BZIP2=1
@@ -381,5 +381,28 @@ target_compile_definitions(ocp-wasm PRIVATE
 
 target_compile_options(ocp-wasm PRIVATE
     "-include${CMAKE_CURRENT_SOURCE_DIR}/include/sdl_audio_shim.h")
+
+# Warnings for the port's own sources. Several of them #include an upstream
+# .c file to wrap it, so the classes upstream trips on stay off:
+# sign-compare, #warning notes, and the 60-byte database signatures.
+file(GLOB OCP_WASM_WARNING_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+set_source_files_properties(${OCP_WASM_WARNING_SOURCES} PROPERTIES
+    COMPILE_FLAGS "-Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-cpp -Wno-unterminated-string-initialization")
+
+set(OCP_PRELOAD_DEPS
+    "${CMAKE_SOURCE_DIR}/unifont-16.0.04.ttf"
+    "${CMAKE_SOURCE_DIR}/ocp-default.ini")
+if(WASM_INCLUDE_HELP)
+    list(APPEND OCP_PRELOAD_DEPS "${CMAKE_SOURCE_DIR}/../ocp.hlp")
+endif()
+if(WASM_INCLUDE_ADPLUG_DB)
+    list(APPEND OCP_PRELOAD_DEPS "${CMAKE_SOURCE_DIR}/../playopl/adplugdb-git/adplug.db")
+endif()
+if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/CPMDLAND.DAT")
+    list(APPEND OCP_PRELOAD_DEPS "${CMAKE_CURRENT_BINARY_DIR}/CPMDLAND.DAT")
+endif()
+set_property(TARGET ocp-wasm PROPERTY LINK_DEPENDS "${OCP_PRELOAD_DEPS}")
 
 # Plugin target definitions are in their respective .cmake files

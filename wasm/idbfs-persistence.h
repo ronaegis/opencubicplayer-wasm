@@ -103,9 +103,9 @@ typedef void (*idbfs_sync_callback_t)(int success, void *user_data);
 int idbfs_wait_for_sync(int timeout_ms, idbfs_sync_callback_t callback, void *user_data);
 
 /**
- * Cleanup IDBFS resources.
- * Should be called during shutdown.
+ * Start a save to IndexedDB. If a sync is already running, another save
+ * starts when it finishes. Safe to call from pagehide.
  */
-void idbfs_close(void);
+void idbfs_flush(void);
 
 #endif /* WASM_IDBFS_PERSISTENCE_H */

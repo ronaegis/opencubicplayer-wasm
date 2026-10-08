@@ -29,24 +29,6 @@
 /* Forward declare our wrapper */
 static struct ocpfilehandle_t *wasm_unix_file_open_wrapper(struct ocpfile_t *_s);
 
-/* Override unix_file_steal so every file object routes through the downloader */
-static struct ocpfile_t *unix_file_steal(struct ocpdir_t *parent, const uint32_t dirdb_node, uint64_t filesize)
-{
-	/* Call the original function */
-	struct ocpfile_t *file = original_unix_file_steal(parent, dirdb_node, filesize);
-
-	if (file)
-	{
-		/* Replace the real_open function with our wrapper (open is cache wrapper) */
-#ifndef FILEHANDLE_CACHE_DISABLE
-		file->real_open = wasm_unix_file_open_wrapper;
-#else
-		file->open = wasm_unix_file_open_wrapper;
-#endif
-	}
-
-	return file;
-}
 
 /* Our wrapper for unix_file_open that downloads files on-demand */
 static struct ocpfilehandle_t *wasm_unix_file_open_wrapper(struct ocpfile_t *_s)
@@ -238,20 +220,6 @@ static void patch_dir_vtable(struct ocpdir_t *dir)
 	}
 }
 
-/* Wrap unix_dir_steal to patch every directory as it's created */
-static struct ocpdir_t *unix_dir_steal(struct ocpdir_t *parent, const uint32_t dirdb_node)
-{
-	/* Call the original to create the directory */
-	struct ocpdir_t *dir = original_unix_dir_steal(parent, dirdb_node);
-
-	if (dir)
-	{
-		/* Patch this directory's vtable */
-		patch_dir_vtable(dir);
-	}
-
-	return dir;
-}
 
 /* Provide filesystem_unix_init that patches the directories */
 int filesystem_unix_init(void)

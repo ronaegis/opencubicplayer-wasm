@@ -28,3 +28,39 @@ void wasm_report_loading_status(const char *message)
 		}
 	}, message);
 }
+
+static void wasm_call_page(const char *fn, const char *message)
+{
+	if (!fn || !message) {
+		return;
+	}
+
+	EM_ASM({
+		var name = UTF8ToString($0);
+		var text = UTF8ToString($1);
+		var pageFn = (typeof window !== 'undefined') ? window[name] : null;
+		if (typeof pageFn === 'function') {
+			pageFn(text);
+		} else {
+			console.error('[OCP] ' + name + ' is missing: ' + text);
+		}
+	}, fn, message);
+}
+
+void wasm_report_page_error(const char *message)
+{
+	if (!message) {
+		return;
+	}
+	fprintf(stderr, "[OCP] %s\n", message);
+	wasm_call_page("ocpShowFatalError", message);
+}
+
+void wasm_report_page_notice(const char *message)
+{
+	if (!message) {
+		return;
+	}
+	fprintf(stderr, "[OCP] %s\n", message);
+	wasm_call_page("ocpShowNotice", message);
+}

@@ -156,7 +156,6 @@ static void modland_com_initialize_Run_impl(
 	for (int iter = 0; (loop_limit < 0) || (iter < loop_limit); )
 	{
 		enum modland_com_initialize_state old_state = engine->state;
-		int did_work = 1;  /* Assume we did work unless proven otherwise */
 
 		switch (engine->state)
 		{

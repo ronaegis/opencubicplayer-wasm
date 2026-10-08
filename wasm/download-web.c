@@ -217,121 +217,7 @@ static int parse_http_date (const char *input, unsigned int *_Year, unsigned cha
 	return 0;
 }
 
-static int download_parse_header_textfile (struct download_request_t *req, struct textfile_t *textfile)
-{
-	const char *line;
 
-	int fresh_request = 1;
-
-	while ((line = textfile_fgets (textfile)))
-	{	/* header can contain multiple header sequences, we want the last one */
-
-		if (!strlen (line))
-		{
-			fresh_request = 1;
-		} else if (fresh_request)
-		{
-			char *end;
-			long newcode;
-
-			/* line should start with HTTP/ */
-			if (strncmp (line, "HTTP/", 5))
-			{
-				req->errmsg = "invalid HTTP header syntax (1)";
-				return -1;
-			}
-
-			/* contain version and the a space */
-			line = strchr (line, ' ');
-			if (!line)
-			{
-				req->errmsg = "invalid HTTP header syntax (2)";
-				return -1;
-			}
-			line++;
-
-			/* before ending with number */
-			newcode = strtol (line, &end, 10);
-			if (end == line)
-			{
-				req->errmsg = "invalid HTTP header syntax (3)";
-				return -1;
-			}
-
-			if ((newcode <= 100) && (newcode >= 600))
-			{
-				req->errmsg = "invalid HTTP header syntax (4)";
-				return -1;
-			}
-			req->httpcode = newcode;
-			fresh_request = 0;
-		} else if (!strncasecmp ("Last-Modified: ", line, 15))
-		{
-			if (parse_http_date (line + 15, &req->Year, &req->Month, &req->Day, &req->Hour, &req->Minute, &req->Second))
-			{
-				req->errmsg = "Failed to parse HTTP header date";
-				return -1;
-			}
-		} else if (!strncasecmp ("content-length: ", line, 16))
-		{
-			req->ContentLength = strtoul (line + 16, 0, 10);
-		}
-	}
-
-	switch (req->httpcode)
-	{
-		case 200:
-			break;
-		case 400: req->errmsg = "400 - Bad Request";              return -1;
-		case 401: req->errmsg = "401 - Unauthorized";             return -1;
-		case 403: req->errmsg = "403 - Forbidden";                return -1;
-		case 404: req->errmsg = "404 - Not found";                return -1;
-		case 408: req->errmsg = "408 - Request Timeout";          return -1;
-		case 426: req->errmsg = "426 - Upgrade Required";         return -1;
-		case 429: req->errmsg = "429 - Too Many Requests";        return -1;
-		case 500: req->errmsg = "500 - Internal Server Error";    return -1;
-		case 502: req->errmsg = "502 - Bad Gateway";              return -1;
-		case 503: req->errmsg = "503 - Service Unavailable";      return -1;
-		case 504: req->errmsg = "504 - Gateway Timeout";          return -1;
-		case 521: req->errmsg = "512 - Web Server Is Down";       return -1;
-		case 522: req->errmsg = "522 - Connection Timed Out";     return -1;
-		case 523: req->errmsg = "523 - Origin Is Unreachable";    return -1;
-		case 524: req->errmsg = "524 - A Timeout Occurred";       return -1;
-		default:  req->errmsg = "Not the expected 200 HTTP code"; return -1;
-	}
-	return 0;
-}
-
-static int download_parse_header (struct download_request_t *req)
-{
-	struct ocpfilehandle_t *filehandle;
-	struct textfile_t *textfile;
-	int retval;
-
-	filehandle = download_request_resolve (req, req->tempheader_filename);
-	if (!filehandle)
-	{
-		req->errmsg = "Unable to open file";
-		return -1;
-	}
-
-	textfile = textfile_start (filehandle);
-	filehandle->unref (filehandle);
-	filehandle = 0;
-
-	if (!textfile)
-	{
-		req->errmsg = "failed to hand over HTTP header file";
-		return -1;
-	}
-
-	retval = download_parse_header_textfile (req, textfile);
-
-	textfile_stop (textfile);
-	textfile = 0;
-
-	return retval;
-}
 
 int download_request_iterate (struct download_request_t *_req)
 {
@@ -356,8 +242,24 @@ int download_request_iterate (struct download_request_t *_req)
 		{
 			req->fetch_done = 1;
 
-			/* Check HTTP status */
-			if (req->fetch->status == 200)
+			/* Check HTTP status. Status 0 is a network or CORS failure, not a hit. */
+			if (req->fetch->status == 0)
+			{
+				req->base.httpcode = 0;
+				req->base.errcode = -1;
+				req->base.errmsg = "network or CORS failure";
+				req->fetch_success = 0;
+				fprintf(stderr, "WASM: Download failed - network or CORS failure\n");
+			}
+			else if (req->fetch->status == 200 && req->fetch->numBytes == 0)
+			{
+				req->base.httpcode = 200;
+				req->base.errcode = -1;
+				req->base.errmsg = "empty response";
+				req->fetch_success = 0;
+				fprintf(stderr, "WASM: Download failed - HTTP 200 with an empty body\n");
+			}
+			else if (req->fetch->status == 200)
 			{
 				req->base.httpcode = 200;
 				req->base.ContentLength = req->fetch->numBytes;
@@ -367,12 +269,22 @@ int download_request_iterate (struct download_request_t *_req)
 				int fd = open(req->base.tempdata_filepath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 				if (fd >= 0)
 				{
-					write(fd, req->fetch->data, req->fetch->numBytes);
+					ssize_t written = write(fd, req->fetch->data, req->fetch->numBytes);
 					close(fd);
 
-					/* Mark data directory for IDBFS sync (modland cache) */
-					extern void idbfs_mark_dirty_data(void);
-					idbfs_mark_dirty_data();
+					if (written < 0 || (uint64_t)written != (uint64_t)req->fetch->numBytes)
+					{
+						unlink(req->base.tempdata_filepath);
+						req->base.errcode = -1;
+						req->base.errmsg = "Failed to write downloaded data to temp file";
+						req->fetch_success = 0;
+					}
+					else
+					{
+						/* Mark data directory for IDBFS sync (modland cache) */
+						extern void idbfs_mark_dirty_data(void);
+						idbfs_mark_dirty_data();
+					}
 				}
 				else
 				{

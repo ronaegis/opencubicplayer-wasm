@@ -111,7 +111,6 @@ extern void wasm_interface_main_loop(void);
 
 // WASM stub function declarations
 int plDisplayInit(void);
-int cfConfigInit(void);
 int conInit(void);
 int errInit(void);
 
@@ -297,6 +296,65 @@ copy_cleanup:
         unlink(dst);
     }
     return result;
+}
+
+static int wasm_seed_default_config(void)
+{
+    char dest[PATH_MAX];
+    int rc;
+
+    if (!configAPI.ConfigHomePath) {
+        return -1;
+    }
+    if (snprintf(dest, sizeof(dest), "%socp.ini", configAPI.ConfigHomePath) >= (int)sizeof(dest)) {
+        fprintf(stderr, "WASM: config path truncated\n");
+        return -1;
+    }
+    if (file_exists(dest)) {
+        return 0;
+    }
+    rc = copy_file_if_present("/assets/ocp.ini", dest);
+    if (rc == 1) {
+        fprintf(stderr, "WASM: packaged /assets/ocp.ini is missing\n");
+        return -1;
+    }
+    return rc;
+}
+
+static int wasm_read_stored_config(void)
+{
+    int argc = stored_argc;
+    char **argv = stored_argv;
+    static char *fallback_argv[] = { "ocp", NULL };
+
+    if (argc <= 0 || !argv) {
+        argc = 1;
+        argv = fallback_argv;
+    }
+    return cfGetConfig(argc, argv);
+}
+
+static void wasm_apply_browser_device_defaults(void)
+{
+    const char *sound = (configAPI.SoundSec && configAPI.SoundSec[0]) ? configAPI.SoundSec : "sound";
+    const char *players = cfGetProfileString(sound, "playerdevices", NULL);
+    const char *waves = cfGetProfileString(sound, "wavetabledevices", NULL);
+    const char *screen = (configAPI.ScreenSec && configAPI.ScreenSec[0]) ? configAPI.ScreenSec : "screen";
+
+    /* A saved list that already names the browser driver is left alone.
+     * A desktop ini, or a missing key, is pointed at the drivers this build has. */
+    if (!players || !strstr(players, "devpSDL2")) {
+        cfSetProfileString(sound, "playerdevices", "devpSDL2 devpNone");
+    }
+    if (!waves || !strstr(waves, "devwMix")) {
+        cfSetProfileString(sound, "wavetabledevices", "devwMix devwMixF devwNone");
+    }
+    if (!cfGetProfileString(sound, "sdl_buffer_ms", NULL)) {
+        cfSetProfileInt(sound, "sdl_buffer_ms", 50, 10);
+    }
+    if (!cfGetProfileString(screen, "analyser", NULL)) {
+        cfSetProfileBool(screen, "analyser", 1);
+    }
 }
 
 static int create_cpmodnfo(const char *path)
@@ -493,51 +551,6 @@ static void wasm_fsRegisterExt_wrapper(const char *ext)
     wasm_registered_extensions_count++;
 }
 
-// Export function to get all registered extensions as a comma-separated string
-EMSCRIPTEN_KEEPALIVE
-const char* wasm_get_supported_extensions(void)
-{
-    static char *extensions_string = NULL;
-    size_t total_len = 0;
-    size_t i;
-    char *ptr;
-
-    // Free previous string if it exists
-    if (extensions_string) {
-        free(extensions_string);
-        extensions_string = NULL;
-    }
-
-    // Calculate total length needed (including dots and commas)
-    for (i = 0; i < wasm_registered_extensions_count; i++) {
-        total_len += strlen(wasm_registered_extensions[i]) + 2; // +1 for dot, +1 for comma
-    }
-
-    if (total_len == 0) {
-        return ""; // No extensions registered yet
-    }
-
-    // Allocate buffer
-    extensions_string = malloc(total_len + 1); // +1 for null terminator
-    if (!extensions_string) {
-        return "";
-    }
-
-    // Build comma-separated list with dots
-    ptr = extensions_string;
-    for (i = 0; i < wasm_registered_extensions_count; i++) {
-        if (i > 0) {
-            *ptr++ = ',';
-        }
-        *ptr++ = '.';
-        strcpy(ptr, wasm_registered_extensions[i]);
-        ptr += strlen(wasm_registered_extensions[i]);
-    }
-    *ptr = '\0';
-
-    return extensions_string;
-}
-
 static void wasm_configure_plugin_interfaces(void)
 {
     extern void mdbRegisterReadInfo(struct mdbreadinforegstruct *r);
@@ -572,43 +585,6 @@ static void wasm_configure_plugin_interfaces(void)
     wasm_plugin_close_api.mcpUnregisterPostProcFP = mcpUnregisterPostProcFP;
     wasm_plugin_close_api.mcpUnregisterPostProcInteger = mcpUnregisterPostProcInteger;
     wasm_plugin_close_api.filesystem_setup_unregister_file = filesystem_setup_unregister_file;
-}
-
-static int wasm_init_plugin_system(void)
-{
-    if (wasm_plugins_initialized) {
-        return 0;
-    }
-
-    framelock_init();
-
-    lnkInit();
-
-    memset(&wasm_plugin_api, 0, sizeof(wasm_plugin_api));
-    memset(&wasm_plugin_close_api, 0, sizeof(wasm_plugin_close_api));
-
-    wasm_configure_plugin_interfaces();
-
-    extern void wasm_init_config_sections(void);
-    wasm_init_config_sections();
-
-	if (lnkLinkDir(cfProgramPathAutoload) < 0) {
-		fprintf(stderr, "WASM: Failed to autoload plugins from %s\n", cfProgramPathAutoload);
-		return -1;
-	}
-
-	if (lnkInitAll()) {
-		fprintf(stderr, "WASM: lnkInitAll failed\n");
-		return -1;
-	}
-
-	if (lnkPluginInitAll(&wasm_plugin_api)) {
-		fprintf(stderr, "WASM: lnkPluginInitAll failed\n");
-		return -1;
-	}
-
-    wasm_plugins_initialized = 1;
-    return 0;
 }
 
 // WASM state structure
@@ -654,30 +630,9 @@ void wasm_enable_file_selector_overlay(void)
 	 * because we want to keep the current playback state intact */
 }
 
-// Global filename storage
-char g_current_filename[256] = {0};
-
 // Note: Audio system is now handled entirely by OCP's MCP system
 
-// Forward declarations
-static void wasm_original_main_loop(void);
 
-// WASM-specific audio tick function that avoids SDL locking issues
-static void wasm_safe_audio_tick(void) {
-    // In WASM, we need to be very careful about SDL audio locking
-    // The original cpifaceIdle() calls devpSDLIdle() which hangs on SDL_LockAudioDevice
-
-    // Instead of calling the full cpifaceIdle(), we'll call the MCP and PLR idle functions directly
-    extern struct cpifaceSessionPrivate_t cpifaceSessionAPI;
-
-    // Call the music player idle function directly (bypasses SDL locking)
-    if (cpifaceSessionAPI.Public.mcpDevAPI && cpifaceSessionAPI.Public.mcpDevAPI->Idle) {
-        cpifaceSessionAPI.Public.mcpDevAPI->Idle(&cpifaceSessionAPI.Public);
-    }
-
-    // For PLR idle, we need to be more careful since it might call devpSDLIdle()
-    // Let's skip it for now and see if just the MCP idle is enough
-}
 
 // Include the interface system after our declarations
 #include "../stuff/poutput-sdl2.h"
@@ -766,14 +721,30 @@ static struct mainstruct wasm_main_struct = {
 extern void wasm_main_loop(void);
 
 EMSCRIPTEN_KEEPALIVE
+int wasm_startup_is_complete(void)
+{
+    return wasm_startup_completed;
+}
+
+EMSCRIPTEN_KEEPALIVE
 int wasm_start_ocp(void)
 {
     if (wasm_runtime_started) {
         return 0;
     }
 
+    /* Device setup reads ocp.ini. That read finishes in the IDBFS callback,
+     * which the page waits for before calling this. Starting earlier would
+     * apply defaults and ignore the saved file. */
+    if (!wasm_startup_completed) {
+        fprintf(stderr, "WASM: wasm_start_ocp called before ocp.ini was read\n");
+        wasm_report_page_error("OpenCubicPlayer started before ocp.ini was read.");
+        return -1;
+    }
+
 	if (wasm_setup_program_paths() < 0) {
 		fprintf(stderr, "WASM: Failed to set up program paths\n");
+		wasm_report_page_error("OpenCubicPlayer could not set up its program paths.");
 		return -1;
 	}
 
@@ -787,22 +758,14 @@ int wasm_start_ocp(void)
     extern void wasm_init_config_sections(void);
     wasm_init_config_sections();
 
-    // Force WASM-friendly default devices (driver names are case-sensitive!)
-    // List drivers in priority order - first one detected will be used
-    cfSetProfileString("sound", "playerdevices", "devpSDL2 devpNone");
-    cfSetProfileString("sound", "wavetabledevices", "devwMix devwMixF devwNone");
+    /* Fill browser device keys only when the loaded ini does not already name them. */
+    wasm_apply_browser_device_defaults();
 
-    // WASM-specific: Set SDL audio buffer to 50ms instead of default 125ms
-    // This prevents audio starvation with players that have 100ms internal buffers (like HVL/AHX)
-    cfSetProfileInt("sound", "sdl_buffer_ms", 50, 10);
-    
-    // WASM-specific: Enable analyzer by default
-    cfSetProfileInt("screen", "analyser", 1, 10);
-    
     // Initialize core modules BEFORE loading dynamic plugins
     // These are statically linked and not part of the plugin system
 	if (cpiface_dllextinfo.Init && cpiface_dllextinfo.Init(&configAPI) < 0) {
 		fprintf(stderr, "WASM: Failed to initialize cpiface\n");
+		wasm_report_page_error("OpenCubicPlayer could not initialize the player interface.");
 		return -1;
 	}
 
@@ -813,21 +776,25 @@ int wasm_start_ocp(void)
 	// Call PreInit for statically linked modules to set up config-based driver slots
 	if (deviplay_dllextinfo.PreInit && deviplay_dllextinfo.PreInit(&configAPI) < 0) {
 		fprintf(stderr, "WASM: Failed to run deviplay PreInit\n");
+		wasm_report_page_error("OpenCubicPlayer could not initialize the playback device list.");
 		return -1;
 	}
 
 	if (deviwave_dllextinfo.PreInit && deviwave_dllextinfo.PreInit(&configAPI) < 0) {
 		fprintf(stderr, "WASM: Failed to run deviwave PreInit\n");
+		wasm_report_page_error("OpenCubicPlayer could not initialize the wavetable device list.");
 		return -1;
 	}
 
 	if (deviplay_dllextinfo.PluginInit && deviplay_dllextinfo.PluginInit(&wasm_plugin_api) < 0) {
 		fprintf(stderr, "WASM: Failed to initialize deviplay\n");
+		wasm_report_page_error("OpenCubicPlayer could not start the playback devices.");
 		return -1;
 	}
 
 	if (deviwave_dllextinfo.PluginInit && deviwave_dllextinfo.PluginInit(&wasm_plugin_api) < 0) {
 		fprintf(stderr, "WASM: Failed to initialize deviwave\n");
+		wasm_report_page_error("OpenCubicPlayer could not start the wavetable devices.");
 		return -1;
 	}
 
@@ -835,18 +802,21 @@ int wasm_start_ocp(void)
 	wasm_report_loading_status("Loading plugins from autoload directory...");
 	if (lnkLinkDir(cfProgramPathAutoload) < 0) {
 		fprintf(stderr, "WASM: Failed to autoload plugins from %s\n", cfProgramPathAutoload);
+		wasm_report_page_error("OpenCubicPlayer could not load plugins from the autoload directory.");
 		return -1;
 	}
 
 	wasm_report_loading_status("Initializing plugins (PreInit/Init)...");
 	if (lnkInitAll()) {
 		fprintf(stderr, "WASM: lnkInitAll failed\n");
+		wasm_report_page_error("A plugin failed during initialization.");
 		return -1;
 	}
 
 	wasm_report_loading_status("Registering plugin features...");
 	if (lnkPluginInitAll(&wasm_plugin_api)) {
 		fprintf(stderr, "WASM: lnkPluginInitAll failed\n");
+		wasm_report_page_error("A plugin failed while registering its features.");
 		return -1;
 	}
 
@@ -861,11 +831,13 @@ int wasm_start_ocp(void)
 
 	if (deviplay_dllextinfo.LateInit && deviplay_dllextinfo.LateInit(&wasm_plugin_api) < 0) {
 		fprintf(stderr, "WASM: Failed to run deviplay LateInit\n");
+		wasm_report_page_error("OpenCubicPlayer could not finish playback device setup.");
 		return -1;
 	}
 
 	if (deviwave_dllextinfo.LateInit && deviwave_dllextinfo.LateInit(&wasm_plugin_api) < 0) {
 		fprintf(stderr, "WASM: Failed to run deviwave LateInit\n");
+		wasm_report_page_error("OpenCubicPlayer could not finish wavetable device setup.");
 		return -1;
 	}
 
@@ -876,6 +848,7 @@ int wasm_start_ocp(void)
     // Call wasm_ocp_main - this now prepares the file selector for stepper-based updates
 	if (wasm_ocp_main(stored_argc, stored_argv) < 0) {
 		fprintf(stderr, "WASM: wasm_ocp_main failed\n");
+		wasm_report_page_error("OpenCubicPlayer failed while opening the file selector.");
 		return -1;
 	}
 
@@ -887,9 +860,21 @@ int wasm_start_ocp(void)
         // Use setInterval instead of requestAnimationFrame to keep audio playing in background
         // 60 FPS = ~16.67ms interval
         Module._mainLoopInterval = setInterval(function() {
-            Module._wasm_main_loop();
+            try {
+                Module._wasm_main_loop();
+            } catch (err) {
+                if (err === 'unwind' || (err && err.message === 'unwind')) {
+                    return;
+                }
+                // A trap leaves the player in an unknown state. Stop the loop
+                // and tell the visitor instead of throwing on every frame.
+                clearInterval(Module._mainLoopInterval);
+                console.error('wasm_main_loop', err);
+                if (typeof window !== 'undefined' && typeof window.ocpShowFatalError === 'function') {
+                    window.ocpShowFatalError('OpenCubicPlayer crashed. Reload the page to restart it.');
+                }
+            }
         }, 16);
-        console.log('Main loop started with setInterval (background-tab safe)');
     });
 
     return 0;
@@ -912,17 +897,27 @@ static void wasm_drive_file_selector(void)
     fs_result = fsFileSelect();
 
     /* Handle file selector errors or cancellation */
+	/* A browser tab has nowhere to quit to. Reopen the selector on quit or
+	 * error. A failure on three frames in a row is not a quit, so stop with
+	 * a visible message. */
+	static int consecutive_failures = 0;
 	if (fs_result < 0) {
 		fprintf(stderr, "WASM: File selector returned error or user quit (%d)\n", fs_result);
-		wasm_runtime_clear_pending();
-		g_runtime.mode = WASM_MODE_ERROR;
+		if (++consecutive_failures >= 3) {
+			wasm_runtime_clear_pending();
+			g_runtime.mode = WASM_MODE_ERROR;
+			wasm_report_page_error("The file selector failed repeatedly. Reload the page to restart it.");
+			return;
+		}
+		wasm_enable_file_selector();
 		return;
 	}
+	consecutive_failures = 0;
 
     /* Check if file selector exited without selection */
 	if (fs_result == 0) {
 		if (!fsFileSelectIsActive()) {
-			g_runtime.mode = WASM_MODE_INIT;
+			wasm_enable_file_selector();
 		}
 		return;
 	}
@@ -1062,55 +1057,18 @@ void wasm_main_loop(void) {
         wasm_audio_tick();
     }
 
-    // Poll SDL events FIRST - needed both for playback and interface-only mode (error dialogs)
-    // This must happen before wasm_interface_main_loop so keyboard input is available
-    // In interface-only mode, we put keys into the Console keyboard buffer instead of ProcessKey
+    /* Quit only. Keys, text, and resize stay queued for ekbhit_sdl2dummy. */
+    SDL_PumpEvents();
     {
         SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            switch (event.type) {
-                case SDL_QUIT:
-                    if (!interface_only) {
-                        g_wasm_state.is_running = 0;
-                    }
-                    break;
-
-                case SDL_KEYDOWN:
-                    // Convert SDL key to OCP key format
-                    {
-                        uint16_t ocpkey = 0;
-                        // Basic key conversion - extend as needed
-                        switch (event.key.keysym.sym) {
-                            case SDLK_ESCAPE: ocpkey = KEY_ESC; break;
-                            case SDLK_RETURN: ocpkey = _KEY_ENTER; break;
-                            case SDLK_SPACE:  ocpkey = ' '; break;
-                            case SDLK_LEFT:   ocpkey = KEY_LEFT; break;
-                            case SDLK_RIGHT:  ocpkey = KEY_RIGHT; break;
-                            case SDLK_UP:     ocpkey = KEY_UP; break;
-                            case SDLK_DOWN:   ocpkey = KEY_DOWN; break;
-                            default:
-                                if (event.key.keysym.sym >= 'a' && event.key.keysym.sym <= 'z') {
-                                    ocpkey = event.key.keysym.sym - 'a' + 'A';
-                                } else if (event.key.keysym.sym >= '0' && event.key.keysym.sym <= '9') {
-                                    ocpkey = event.key.keysym.sym;
-                                }
-                                break;
-                        }
-
-                        if (ocpkey) {
-                            // Always push keys to the Console keyboard buffer
-                            // The interface will pull them via KeyboardHit/KeyboardGetChar
-                            extern void ___push_key(uint16_t key);
-                            ___push_key(ocpkey);
-                        }
-                    }
-                    break;
+        while (SDL_PeepEvents(&event, 1, SDL_GETEVENT, SDL_QUIT, SDL_QUIT) > 0) {
+            if (!interface_only) {
+                g_wasm_state.is_running = 0;
             }
         }
     }
 
     // Drive the original interface each frame so the classic UI updates on the canvas
-    // This happens AFTER SDL event polling so keyboard input is available
     wasm_interface_main_loop();
 
     // Process keyboard input and interface events (for cpiface mode only)
@@ -1178,26 +1136,38 @@ static int wasm_finish_startup_sequence(void)
 		return 0;
 	}
 
-	// Initialize configuration system
-	if (cfConfigInit() < 0) {
-		fprintf(stderr, "WASM: Failed to initialize config system\n");
-		return -1;
-	}
-
+	// Paths, directories, and a readable ocp.ini must exist before cfGetConfig.
 	if (wasm_configure_config_paths() < 0) {
 		fprintf(stderr, "WASM: Failed to configure config paths\n");
+		wasm_report_page_error("OpenCubicPlayer could not set up its config directory.");
 		return -1;
 	}
 
 	/* Ensure persistent directories exist under the IDBFS mount */
 	if (wasm_ensure_directory(WASM_CONFIG_DIR) < 0) {
 		fprintf(stderr, "WASM: Failed to create config directory %s\n", WASM_CONFIG_DIR);
+		wasm_report_page_error("OpenCubicPlayer could not create its config directory.");
 		return -1;
 	}
 	if (wasm_ensure_directory(WASM_DATAHOME_DIR) < 0) {
 		fprintf(stderr, "WASM: Failed to create data directory %s\n", WASM_DATAHOME_DIR);
+		wasm_report_page_error("OpenCubicPlayer could not create its data directory.");
 		return -1;
 	}
+
+	if (wasm_seed_default_config() < 0) {
+		wasm_report_page_error("OpenCubicPlayer could not create its default ocp.ini.");
+		return -1;
+	}
+
+	if (wasm_read_stored_config() < 0) {
+		fprintf(stderr, "WASM: Failed to read ocp.ini\n");
+		wasm_report_page_error("OpenCubicPlayer could not read ocp.ini.");
+		return -1;
+	}
+
+	extern void wasm_init_config_sections(void);
+	wasm_init_config_sections();
 
 	// Install WASM config wrapper to sync IDBFS after config changes
 	extern void wasm_config_wrapper_init(void);
@@ -1205,18 +1175,21 @@ static int wasm_finish_startup_sequence(void)
 
 	if (wasm_bootstrap_database_files() < 0) {
 		fprintf(stderr, "WASM: Failed to bootstrap database files\n");
+		wasm_report_page_error("OpenCubicPlayer could not create its database files.");
 		return -1;
 	}
 
 	// Initialize console system
 	if (conInit() < 0) {
 		fprintf(stderr, "WASM: Failed to initialize console system\n");
+		wasm_report_page_error("OpenCubicPlayer could not initialize the console.");
 		return -1;
 	}
 
 	// Initialize error system
 	if (errInit() < 0) {
 		fprintf(stderr, "WASM: Failed to initialize error system\n");
+		wasm_report_page_error("OpenCubicPlayer could not initialize its error handler.");
 		return -1;
 	}
 
@@ -1224,6 +1197,7 @@ static int wasm_finish_startup_sequence(void)
 	extern int dirdbInit(const struct configAPI_t *configAPI);
 	if (dirdbInit(&configAPI) < 0) {
 		fprintf(stderr, "WASM: Failed to initialize directory database\n");
+		wasm_report_page_error("OpenCubicPlayer could not open its directory database.");
 		return -1;
 	}
 
@@ -1232,10 +1206,12 @@ static int wasm_finish_startup_sequence(void)
 	extern int fsInit(void);
 	if (!fsPreInit(&configAPI)) {
 		fprintf(stderr, "WASM: Failed to pre-initialize file selector\n");
+		wasm_report_page_error("OpenCubicPlayer could not prepare the file selector.");
 		return -1;
 	}
 	if (!fsInit()) {
 		fprintf(stderr, "WASM: Failed to initialize file selector\n");
+		wasm_report_page_error("OpenCubicPlayer could not start the file selector.");
 		return -1;
 	}
 
@@ -1254,6 +1230,7 @@ static void wasm_on_initial_sync(int success, void *user_data)
 
 	if (!success) {
 		fprintf(stderr, "WASM: Warning - IDBFS populate timeout or failure, continuing\n");
+		wasm_report_page_notice("Saved settings could not be loaded from this browser. Continuing with defaults.");
 	}
 
 	if (wasm_finish_startup_sequence() < 0) {
@@ -1269,6 +1246,7 @@ int main(int argc, char *argv[]) {
 
 	if (wasm_prepare_directories() < 0) {
 		fprintf(stderr, "WASM: Failed to prepare base directories\n");
+		wasm_report_page_error("OpenCubicPlayer could not prepare its directories.");
 		return -1;
 	}
 
@@ -1276,6 +1254,7 @@ int main(int argc, char *argv[]) {
 	// This must happen AFTER parent directories are created but BEFORE config init
 	if (idbfs_init() < 0) {
 		fprintf(stderr, "WASM: Failed to initialize IDBFS persistence\n");
+		wasm_report_page_error("IndexedDB is unavailable, so settings cannot be stored. Private browsing often blocks it.");
 		return -1;
 	}
 
@@ -1289,93 +1268,5 @@ int main(int argc, char *argv[]) {
 	return 0;
 }
 
-// Cleanup function
-void wasm_cleanup(void) {
-    if (g_wasm_state.is_initialized) {
-        wasm_display_shutdown();
-
-        if (g_wasm_state.renderer) {
-            SDL_DestroyRenderer(g_wasm_state.renderer);
-            g_wasm_state.renderer = NULL;
-        }
-        if (g_wasm_state.window) {
-            SDL_DestroyWindow(g_wasm_state.window);
-            g_wasm_state.window = NULL;
-        }
-
-        SDL_Quit();
-        g_wasm_state.is_initialized = 0;
-    }
-
-    if (wasm_runtime_started) {
-        // Close core modules in reverse order
-        if (deviplay_dllextinfo.PreClose) {
-            deviplay_dllextinfo.PreClose(&wasm_plugin_close_api);
-        }
-        if (deviplay_dllextinfo.PluginClose) {
-            deviplay_dllextinfo.PluginClose(&wasm_plugin_close_api);
-        }
-        if (deviplay_dllextinfo.Close) {
-            deviplay_dllextinfo.Close();
-        }
-        if (deviplay_dllextinfo.LateClose) {
-            deviplay_dllextinfo.LateClose();
-        }
-
-        if (deviwave_dllextinfo.PreClose) {
-            deviwave_dllextinfo.PreClose(&wasm_plugin_close_api);
-        }
-        if (deviwave_dllextinfo.PluginClose) {
-            deviwave_dllextinfo.PluginClose(&wasm_plugin_close_api);
-        }
-        if (deviwave_dllextinfo.Close) {
-            deviwave_dllextinfo.Close();
-        }
-        if (deviwave_dllextinfo.LateClose) {
-            deviwave_dllextinfo.LateClose();
-        }
-
-        if (cphlpif_dllextinfo.Close) {
-            cphlpif_dllextinfo.Close();
-        }
-        if (cphlpif_dllextinfo.LateClose) {
-            cphlpif_dllextinfo.LateClose();
-        }
-
-        if (cphelper_dllextinfo.PluginClose) {
-            cphelper_dllextinfo.PluginClose(&wasm_plugin_close_api);
-        }
-
-        if (cpiface_dllextinfo.PreClose) {
-            cpiface_dllextinfo.PreClose(&wasm_plugin_close_api);
-        }
-        if (cpiface_dllextinfo.PluginClose) {
-            cpiface_dllextinfo.PluginClose(&wasm_plugin_close_api);
-        }
-        if (cpiface_dllextinfo.Close) {
-            cpiface_dllextinfo.Close();
-        }
-        if (cpiface_dllextinfo.LateClose) {
-            cpiface_dllextinfo.LateClose();
-        }
-
-        wasm_runtime_started = 0;
-    }
-
-    if (wasm_plugins_initialized) {
-        // Close dynamic plugins
-        lnkPluginCloseAll(&wasm_plugin_close_api);
-        lnkCloseAll();
-        lnkFree(0);
-        wasm_plugins_initialized = 0;
-    }
-}
-
-// Register cleanup with emscripten
-EMSCRIPTEN_KEEPALIVE
-void cleanup_ocp(void) {
-    wasm_cleanup();
-}
-
-// Note: All audio control is now handled through the OCP system
-// via the exported functions in wasm-fileio.c (play, pause_playback, stop)
+// Playback is driven by the on-canvas interface.
+// The page calls idbfs_flush from pagehide so the last config write is stored.

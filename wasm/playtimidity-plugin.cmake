@@ -152,8 +152,6 @@ target_compile_definitions(playtimidity-module PRIVATE
     HAVE_SYS_TIME_H=1
     HAVE_GETTIMEOFDAY=1
     OCP_MAJOR_VERSION=3
-    OCP_MINOR_VERSION=0
-    OCP_PATCH_VERSION=1
     VERSION="3.0.1-WASM"
 )
 

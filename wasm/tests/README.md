@@ -14,10 +14,6 @@ This test suite validates that the WASM version of OpenCubicPlayer correctly han
 ```bash
 # Setup and run all tests
 cd wasm/tests
-make setup
-make test
-
-# Or using npm directly
 npm install
 npm test
 ```
@@ -31,7 +27,10 @@ wasm/tests/
 ├── test-canvas.js            # Canvas rendering tests
 ├── test-audio.js             # Audio output tests
 ├── test-*.html               # Browser-based test pages
-├── Makefile                  # Make commands for easy testing
+├── test-visitor-file.js      # Shipped page: a visitor file lands in /music
+├── test-config-roundtrip.js  # Shipped page: a saved ocp.ini is read after reload
+├── test-playback.js          # Shipped page: open a demo module, check sound and keys
+├── *.test.js                 # Jest: wrapped symbols, page contract, dynCall list
 └── README.md                 # This file
 ```
 
@@ -74,22 +73,6 @@ node test-runner.js --timeout 60000
 
 # Output results to file
 node test-runner.js --output-file results.json
-```
-
-### Make Commands
-
-```bash
-make help              # Show all available commands
-make install          # Install dependencies
-make setup            # Full environment setup
-make test             # Run complete test suite
-make test-canvas      # Canvas tests only
-make test-audio       # Audio tests only
-make test-ci          # CI mode
-make test-verbose     # Verbose output
-make test-debug       # Visible browser
-make clean            # Clean artifacts
-make status           # Show environment status
 ```
 
 ## Test Categories
@@ -282,8 +265,6 @@ cd wasm
 
 Run tests with visible browser for debugging:
 ```bash
-make test-debug
-# or
 node test-runner.js --no-headless --verbose
 ```
 

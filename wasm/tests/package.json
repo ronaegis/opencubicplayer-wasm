@@ -8,10 +8,10 @@
     "npm": ">=8.0.0"
   },
   "scripts": {
-    "test": "node test-runner.js && node test-visitor-file.js && npm run test:validation",
+    "test": "node test-runner.js && node test-visitor-file.js && node test-config-roundtrip.js && node test-playback.js && npm run test:validation",
     "test:canvas": "node test-canvas.js",
     "test:audio": "node test-audio.js",
-    "test:validation": "jest cpiface-wrapper.test.js",
+    "test:validation": "jest cpiface-wrapper.test.js page-contract.test.js dyncall-list.test.js",
     "test:ci": "node test-runner.js --ci && npm run test:validation",
     "test:headless": "node test-runner.js --headless",
     "test:server": "node test-server.js",

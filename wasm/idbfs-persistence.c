@@ -30,6 +30,7 @@ static double idbfs_wait_deadline = 0.0;
 static int idbfs_wait_timeout_ms = -1;
 static int idbfs_wait_keepalive = 0;
 static int idbfs_wait_active = 0;
+static int idbfs_resync_requested = 0;
 
 /* Debounce settings - don't sync more often than this */
 #define IDBFS_SYNC_DEBOUNCE_SECONDS 5
@@ -48,7 +49,6 @@ EM_JS(int, js_idbfs_mount_and_sync_populate, (), {
 				console.error('IDBFS populate error:', err);
 				Module._idbfs_sync_complete_callback(0);
 			} else {
-				console.log('IDBFS: Successfully populated from IndexedDB');
 				Module._idbfs_sync_complete_callback(1);
 			}
 		});
@@ -72,7 +72,6 @@ EM_JS(int, js_idbfs_sync_to_storage, (), {
 				console.error('IDBFS persist error:', err);
 				Module._idbfs_sync_complete_callback(0);
 			} else {
-				console.log('IDBFS: Successfully persisted to IndexedDB');
 				Module._idbfs_sync_complete_callback(1);
 			}
 		});
@@ -139,14 +138,17 @@ void idbfs_sync_complete_callback(int success)
 {
 	idbfs_sync_active = 0;
 
-	if (success) {
-		fprintf(stderr, "IDBFS: Sync completed successfully\n");
-	} else {
+	if (!success) {
 		fprintf(stderr, "IDBFS: Sync failed\n");
 	}
 
 	if (idbfs_wait_active) {
 		idbfs_dispatch_wait_callback(success);
+	}
+
+	if (idbfs_resync_requested && idbfs_initialized) {
+		idbfs_resync_requested = 0;
+		idbfs_sync_async(0);
 	}
 }
 
@@ -333,33 +335,17 @@ int idbfs_wait_for_sync(int timeout_ms, idbfs_sync_callback_t callback, void *us
 	return 0;
 }
 
-static void idbfs_shutdown_waiter(int success, void *user_data)
-{
-	(void)user_data;
-
-	if (!success) {
-		fprintf(stderr, "IDBFS: Final sync did not complete before shutdown\n");
-	}
-}
-
-void idbfs_close(void)
+EMSCRIPTEN_KEEPALIVE
+void idbfs_flush(void)
 {
 	if (!idbfs_initialized) {
 		return;
 	}
 
-	fprintf(stderr, "IDBFS: Shutting down, performing final sync...\n");
-
-	/* Force final sync */
-	if (!idbfs_sync_active) {
-		idbfs_sync_async(0);
-	}
-
 	if (idbfs_sync_active) {
-		if (idbfs_wait_for_sync(5000, idbfs_shutdown_waiter, NULL) < 0) {
-			fprintf(stderr, "IDBFS: Unable to wait for shutdown sync (wait already active)\n");
-		}
+		idbfs_resync_requested = 1;
+		return;
 	}
 
-	idbfs_initialized = 0;
+	idbfs_sync_async(0);
 }

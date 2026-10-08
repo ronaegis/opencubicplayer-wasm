@@ -18,7 +18,7 @@ class AudioTestRunner {
             timeout: options.timeout || 30000,
             verbose: options.verbose || false,
             ci: options.ci || false,
-            skipAudioPlayback: options.skipAudioPlayback || true // Skip actual audio for CI
+            skipAudioPlayback: options.skipAudioPlayback === true
         };
         this.results = [];
         this.browser = null;
@@ -365,7 +365,7 @@ class AudioTestRunner {
             let availableFunctions = [];
 
             if (typeof Module.ccall === 'function') {
-                const testFunctions = ['play', 'pause_playback', 'stop', 'load_module_file_interface'];
+                const testFunctions = ['wasm_main_loop', 'load_module_file_interface'];
 
                 testFunctions.forEach(funcName => {
                     try {

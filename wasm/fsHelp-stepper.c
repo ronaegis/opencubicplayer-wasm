@@ -32,7 +32,7 @@ void fsHelp_stepper_init(struct fsHelp_stepper_engine *engine)
 
 	cont = brDecodeRef(contents_name);
 	if (!cont)
-		displaystr(1, 0, 0x04, "shit!", 5);
+		displaystr(1, 0, 0x04, "Help index missing", 18);
 
 	brSetPage(cont);
 	brSetWinStart(2);

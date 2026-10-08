@@ -47,57 +47,10 @@ void wasm_filesel_rescan(void)
 	fsRescanCurrentDir();
 }
 
-// Lightweight registries so original interface/player registration works
-struct wasm_fs_type_entry {
-    struct moduletype modtype;
-    const char *interfacename;
-    const struct cpifaceplayerstruct *player;
-};
 
-static struct interfacestruct *wasm_interface_head = NULL;
-static struct wasm_fs_type_entry *wasm_fs_types = NULL;
-static size_t wasm_fs_types_count = 0;
-static size_t wasm_fs_types_capacity = 0;
 
 // Plugin system - now using real dynamic linking via boot/plinkman.c
 // No stubs needed - boot/plinkman.c handles plugin loading with Emscripten's dlopen
-
-// Configuration system stubs
-static char wasm_config_data[4096];
-
-int cfConfigInit(void) {
-    memset(wasm_config_data, 0, sizeof(wasm_config_data));
-    return 1;
-}
-
-void cfConfigClose(void) {
-    // Nothing to close
-}
-
-// Configuration API implementation - these will be called via configAPI structure
-static const char *wasm_GetProfileString(const char *app, const char *key, const char *def) {
-    return def; // Return default for all config queries
-}
-
-static const char *wasm_GetProfileString2(const char *app, const char *app2, const char *key, const char *def) {
-    return def;
-}
-
-static int wasm_GetProfileInt(const char *app, const char *key, int def, int radix) {
-    return def;
-}
-
-static int wasm_GetProfileInt2(const char *app, const char *app2, const char *key, int def, int radix) {
-    return def;
-}
-
-static void wasm_SetProfileString(const char *app, const char *key, const char *str) {
-    // Ignore config writes in WASM
-}
-
-static void wasm_SetProfileInt(const char *app, const char *key, int value, int radix) {
-    // Ignore config writes in WASM
-}
 
 // Directory database API is now provided by filesel/dirdb.c
 
@@ -105,10 +58,6 @@ static void wasm_SetProfileInt(const char *app, const char *key, int value, int 
 
 int conInit(void) {
     return 1;
-}
-
-void conDone(void) {
-    // Nothing to clean up
 }
 
 // File system stubs for MDB
@@ -358,10 +307,6 @@ int errInit(void) {
     return 1;
 }
 
-void errDone(void) {
-    // Nothing to clean up
-}
-
 // Note: Custom SDL rendering code removed - now using original SDL2 driver
 
 // Note: Custom WASM display functions removed - now using original SDL2 implementations
@@ -382,52 +327,9 @@ void errDone(void) {
 // All display-related functions and variables are defined as macros in poutput.h
 // They reference the global Console structure
 
-int _plSetGraphMode(int size) {
-    return 1;
-}
-
-int _plSetTextMode(int size) {
-    return 1;
-}
-
 // Note: Custom display functions removed - handled by original SDL2 driver
 
-// Cursor stubs
-void _plSetCur(uint8_t y, uint8_t x) {
-    // Cursor positioning
-}
-
-void _plSetCurShapes(uint16_t normal, uint16_t fat) {
-    // Cursor shapes
-}
-
 // Graphics functions are all defined as macros in poutput.h
-
-int gSetMode(int mode) {
-    return 1;
-}
-
-void gUpdateScreen(void) {
-    // Update screen buffer
-}
-
-// Sound stubs that should be overridden by real implementations
-int smpInit(int buflen) {
-    return 1;
-}
-
-void smpClose(void) {
-    // Nothing to close
-}
-
-// Archive support stubs
-int archive_instance_init(void) {
-    return 1;
-}
-
-void archive_instance_done(void) {
-    // Nothing to clean up
-}
 
 // File opening stubs for virtual filesystem
 struct ocpfilehandle_t *wasm_file_open_readfile(const char *path);
@@ -485,7 +387,14 @@ int plDisplayInit(void)
 		return -1;
 	}
 
+	/* The desktop driver maps a left click to Enter and a right click to
+	 * fullscreen. In a browser a click is how the canvas gets focus, so it
+	 * must not open the highlighted entry. */
+	SDL_EventState(SDL_MOUSEBUTTONDOWN, SDL_IGNORE);
+
+#ifdef OCP_WASM_DEBUG_LOGGING
 	printf("plDisplayInit: Using original SDL2 console driver\n");
+#endif
 
 	/* Wrap the SDL2 driver's SetTextMode to add CONSOLE_MAX_X clamping */
 	sdl2_driver_original = Console.Driver;
@@ -496,18 +405,22 @@ int plDisplayInit(void)
 	return 0;
 }
 
-// configAPI is now provided by boot/psetting.c
-// but we need to initialize the section pointers properly
-const char *wasm_screen_sec = "screen";
-const char *wasm_sound_sec = "sound";
-const char *wasm_config_sec = "config";
-
-// Function to initialize config sections
+// configAPI is now provided by boot/psetting.c.
+// Section names follow boot/pmain.c: CommandLine -c, then screensec/soundsec.
 void wasm_init_config_sections(void) {
-    extern struct configAPI_t configAPI;
-    configAPI.ScreenSec = wasm_screen_sec;
-    configAPI.SoundSec = wasm_sound_sec;
-    configAPI.ConfigSec = wasm_config_sec;
+    const char *config = cfGetProfileString("CommandLine", "c", "defaultconfig");
+    if (!config || !config[0]) {
+        config = "defaultconfig";
+    }
+    configAPI.ConfigSec = config;
+    configAPI.ScreenSec = cfGetProfileString(config, "screensec", "screen");
+    configAPI.SoundSec = cfGetProfileString(config, "soundsec", "sound");
+    if (!configAPI.ScreenSec || !configAPI.ScreenSec[0]) {
+        configAPI.ScreenSec = "screen";
+    }
+    if (!configAPI.SoundSec || !configAPI.SoundSec[0]) {
+        configAPI.SoundSec = "sound";
+    }
 }
 
 void wasm_display_shutdown(void) {
@@ -558,7 +471,6 @@ int (*PipeProcess)(const char *command, char **output) = wasm_PipeProcess;
 // Global state for WASM audio player
 static void (*g_player_tick_func)(struct cpifaceSessionAPI_t *cpifaceSession) = NULL;
 static struct cpifaceSessionAPI_t *g_cpifaceSession = NULL;
-static int wasm_plr_device_initialized = 0;
 
 int wasm_get_current_audio_latency_ms(void);
 
@@ -879,263 +791,14 @@ int wasm_mcpGet(struct cpifaceSessionAPI_t *cpifaceSession, int ch, int opt);
 
 // Note: plrGetRealMasterVolume is provided by dev/player.c
 
-// WASM implementation - this should override the PLR system's GetMasterSample call
-void wasm_GetMasterSample(int16_t *buf, uint32_t len, uint32_t rate, int opt) {
-    static int debug_counter = 0;
-    if (++debug_counter < 10) {
-        printf( "wasm_GetMasterSample called: len=%u, rate=%u, opt=%d\n", len, rate, opt);
-    }
-
-    // This is where the magic happens - generate MOD audio samples
-    if (g_player_tick_func && g_cpifaceSession) {
-        // Call the MOD player tick function to generate samples
-        g_player_tick_func(g_cpifaceSession);
-    }
-
-    // Use the real OCP audio pipeline - same as player.c:plrGetMasterSample
-    extern const struct plrDevAPI_t *plrDevAPI;
-    if (!plrDevAPI || !plrDevAPI->PeekBuffer || !plrDevAPI->GetRate) {
-        // No audio API available, generate silence
-        memset(buf, 0, len * 2 * sizeof(int16_t));
-        return;
-    }
-
-    uint32_t step = umuldiv(plrDevAPI->GetRate(), 0x10000, rate);
-    int stereoout;
-    int16_t *buf1, *buf2;
-    unsigned int length1, length2;
-    unsigned int maxlen;
-    signed int pass2;
-
-    if (step < 0x1000)
-        step = 0x1000;
-    if (step > 0x800000)
-        step = 0x800000;
-
-    plrDevAPI->PeekBuffer((void **)&buf1, &length1, (void **)&buf2, &length2);
-    stereoout = (opt & mcpGetSampleStereo) ? 1 : 0;
-
-    /* length1, length2 and len are all in sample space, while mixGetMasterSampleSS16S()
-     * and mixGetMasterSampleSS16M() are from time where shared audio-buffer was
-     * stereo/mono/8bit/16bit agnostic and step is multiplied by 2 in order to get stereo.
-     * So we have to compensate: */
-    length1 >>= 1;
-    length2 >>= 1;
-
-    maxlen = imuldiv((length1 + length2), 0x10000, step); /* step goes with twice the speed on stereo */
-    if (len > maxlen) /* not enough data? zero-fill and limit */
-    {
-        memset(buf + maxlen, 0, (len - maxlen) << (1 /* bit16 */ + stereoout));
-        len = maxlen;
-    }
-    pass2 = (signed int)len - (imuldiv(length1, 0x10000, step)); /* pass2 goes negative if length1 can provide more than 256 samples... and maxlen protects both passes */
-
-    if (stereoout)
-    {
-        if (pass2 > 0)
-        {
-            mixGetMasterSampleSS16S(buf, buf1, len - pass2, step);
-            mixGetMasterSampleSS16S(buf + ((len - pass2) * 2), buf2, pass2, step);
-        } else {
-            mixGetMasterSampleSS16S(buf, buf1, len, step);
-        }
-    } else {
-        if (pass2 > 0)
-        {
-            mixGetMasterSampleSS16M(buf, buf1, len - pass2, step);
-            mixGetMasterSampleSS16M(buf + (len - pass2), buf2, pass2, step);
-        } else {
-            mixGetMasterSampleSS16M(buf, buf1, len, step);
-        }
-    }
-}
-
-// WASM device API implementations
-static int wasm_mcpOpenPlayer(int channels, void (*p)(struct cpifaceSessionAPI_t *cpifaceSession), struct ocpfilehandle_t *source_file, struct cpifaceSessionAPI_t *cpifaceSession) {
-
-    printf( "WASM: mcpOpenPlayer called with %d channels\n", channels);
-
-    // Store the tick function and session for later use by the audio system
-    g_player_tick_func = p;
-    g_cpifaceSession = cpifaceSession;
-
-    // Set the physical channel count to match the requested channels
-    // This is critical for MOD playback - the player checks that nchan == PhysicalChannelCount
-    cpifaceSession->PhysicalChannelCount = channels;
-
-    // CRITICAL: Start the PLR audio device when MCP player opens (but only once)
-    if (!wasm_plr_device_initialized) {
-        extern const struct plrDevAPI_t *plrDevAPI;
-        if (plrDevAPI && plrDevAPI->Play) {
-            uint32_t rate = 44100;
-            enum plrRequestFormat format = PLR_STEREO_16BIT_SIGNED;
-            printf( "WASM: Starting PLR audio device from mcpOpenPlayer...\n");
-            int result = plrDevAPI->Play(&rate, &format, source_file, cpifaceSession);
-            printf( "WASM: PLR Play returned %d, rate=%u\n", result, rate);
-            if (result) {
-                wasm_plr_note_output_rate(rate);
-            }
-            if (!result) {
-                printf( "WASM: Failed to start PLR audio device\n");
-                return 0; // Fail MCP open if PLR fails
-            }
-            wasm_plr_device_initialized = 1;
-        } else {
-            printf( "WASM: No PLR device available for audio output\n");
-            return 0;
-        }
-    } else {
-        printf( "WASM: PLR audio device already initialized, skipping\n");
-    }
-
-    return 1; // Success
-}
-
-static int wasm_mcpLoadSamples(struct cpifaceSessionAPI_t *cpifaceSession, struct sampleinfo* si, int n) {
-    return 1; // Success
-}
-
-static void wasm_mcpIdle(struct cpifaceSessionAPI_t *cpifaceSession) {
-    // Delegate to the real mixer system
-    // The real mixer should be initialized and available through the driver system
-    extern const struct mcpDriver_t mcpMixer;  // From devwmix.c
-    static const struct mcpDevAPI_t *real_mixer_api = NULL;
-
-    // Initialize the real mixer on first call
-    if (!real_mixer_api) {
-        printf( "WASM: Initializing real mixer on first mcpIdle call\n");
-        // configAPI is already declared globally
-        extern const struct mixAPI_t *mixAPI;
-
-        // Initialize the real mixer
-        real_mixer_api = mcpMixer.Open(&mcpMixer, &configAPI, mixAPI);
-        if (real_mixer_api) {
-            printf( "WASM: Real mixer initialized successfully\n");
-        } else {
-            printf( "WASM: Failed to initialize real mixer\n");
-            return;
-        }
-    }
-
-    // Call the real mixer's Idle function
-    if (real_mixer_api && real_mixer_api->Idle) {
-        real_mixer_api->Idle(cpifaceSession);
-    }
-}
-
-static void wasm_mcpClosePlayer(struct cpifaceSessionAPI_t *cpifaceSession) {
-}
-
-static int wasm_mcpProcessKey(uint16_t key) {
-    return 0; // Not handled
-}
-
 // Store original player's mcpGet for wrapping (forward declaration)
 static int (*original_player_mcpGet)(struct cpifaceSessionAPI_t *, int, int);
 
-// Wrapper for OpenPlayer that ensures mcpSet/mcpGet are available
-static int wasm_mcpOpenPlayer_wrapper(int channels, void (*p)(struct cpifaceSessionAPI_t *cpifaceSession), struct ocpfilehandle_t *source_file, struct cpifaceSessionAPI_t *cpifaceSession) {
-    #include <stdio.h>
 
-    // Set the mcpSet and mcpGet functions early in the session
-    cpifaceSession->mcpSet = wasm_mcpSet;
-    cpifaceSession->mcpGet = wasm_mcpGet;
 
-    fprintf(stderr, "[WASM] Before OpenPlayer: mcpGet=%p\n", cpifaceSession->mcpGet);
 
-    // Call the original function
-    int result = wasm_mcpOpenPlayer(channels, p, source_file, cpifaceSession);
 
-    fprintf(stderr, "[WASM] After OpenPlayer: mcpGet=%p, wasm_mcpGet=%p\n",
-            cpifaceSession->mcpGet, wasm_mcpGet);
 
-    // After player initialization, save its mcpGet and replace with our wrapper
-    if (cpifaceSession->mcpGet && cpifaceSession->mcpGet != wasm_mcpGet) {
-        original_player_mcpGet = cpifaceSession->mcpGet;
-        cpifaceSession->mcpGet = wasm_mcpGet;
-        fprintf(stderr, "[WASM] Captured player mcpGet=%p, replaced with wrapper\n", original_player_mcpGet);
-    } else {
-        fprintf(stderr, "[WASM] Player did NOT replace mcpGet, keeping wasm_mcpGet\n");
-    }
-
-    return result;
-}
-
-static const struct mcpDevAPI_t wasm_mcpDevAPI = {
-    .OpenPlayer = wasm_mcpOpenPlayer_wrapper,
-    .LoadSamples = wasm_mcpLoadSamples,
-    .Idle = wasm_mcpIdle,
-    .ClosePlayer = wasm_mcpClosePlayer,
-    .ProcessKey = wasm_mcpProcessKey
-};
-
-// WASM mcpAPI implementation
-static int wasm_GetFreq6848(int note) { return 440; } // Stub frequency
-static int wasm_GetFreq8363(int note) { return 440; } // Stub frequency
-static int wasm_GetNote6848(unsigned int freq) { return 60; } // Stub note
-static int wasm_GetNote8363(unsigned int freq) { return 60; } // Stub note
-static int wasm_ReduceSamples(struct sampleinfo *s, int n, long m, enum mcpRed red) { return 0; }
-
-static const struct mcpAPI_t wasm_mcpAPI = {
-    .MixMaxRate = 44100,
-    .MixProcRate = 44100,
-    .GetFreq6848 = wasm_GetFreq6848,
-    .GetFreq8363 = wasm_GetFreq8363,
-    .GetNote6848 = wasm_GetNote6848,
-    .GetNote8363 = wasm_GetNote8363,
-    .ReduceSamples = wasm_ReduceSamples
-};
-
-// Initialize WASM audio device - call this before loading files
-void wasm_init_device(void) {
-    // This function ensures that mcpSet/mcpGet are available early
-    // in the initialization process for proper MOD loading
-    if (g_cpifaceSession) {
-        g_cpifaceSession->mcpSet = wasm_mcpSet;
-        g_cpifaceSession->mcpGet = wasm_mcpGet;
-    }
-}
-
-// WASM audio device implementation - minimal version for OCP compatibility
-static unsigned int wasm_plr_Idle(void) { return 0; }
-static void wasm_plr_PeekBuffer(void **buf1, unsigned int *length1, void **buf2, unsigned int *length2) {
-    *buf1 = NULL; *length1 = 0; *buf2 = NULL; *length2 = 0;
-}
-static int wasm_plr_Play(uint32_t *rate, enum plrRequestFormat *format, struct ocpfilehandle_t *source_file, struct cpifaceSessionAPI_t *cpifaceSession) {
-    *rate = 44100;
-    *format = PLR_STEREO_16BIT_SIGNED;
-    return 1; // Success
-}
-static void wasm_plr_GetBuffer(void **buf, unsigned int *samples) {
-    static int16_t dummy_buffer[1024];
-    *buf = dummy_buffer;
-    *samples = 512; // 512 stereo samples
-}
-static uint32_t wasm_plr_GetRate(void) { return 44100; }
-static void wasm_plr_OnBufferCallback(int samplesuntil, void (*callback)(void *arg, int samples_ago), void *arg) {}
-static void wasm_plr_CommitBuffer(unsigned int samples) {}
-static void wasm_plr_Pause(int pause) {}
-static void wasm_plr_Stop(struct cpifaceSessionAPI_t *cpifaceSession) {}
-static int wasm_plr_ProcessKey(uint16_t key) { return 0; }
-static void wasm_plr_GetStats(uint64_t *committed, uint64_t *processed) {
-    *committed = 0; *processed = 0;
-}
-
-// WASM plrDevAPI implementation
-static struct plrDevAPI_t wasm_plrDevAPI = {
-    .Idle = wasm_plr_Idle,
-    .PeekBuffer = wasm_plr_PeekBuffer,
-    .Play = wasm_plr_Play,
-    .GetBuffer = wasm_plr_GetBuffer,
-    .GetRate = wasm_plr_GetRate,
-    .OnBufferCallback = wasm_plr_OnBufferCallback,
-    .CommitBuffer = wasm_plr_CommitBuffer,
-    .Pause = wasm_plr_Pause,
-    .Stop = wasm_plr_Stop,
-    .VolRegs = NULL,
-    .ProcessKey = wasm_plr_ProcessKey,
-    .GetStats = wasm_plr_GetStats
-};
 
 // Device APIs - plrDevAPI is now provided by dev/deviplay.c
 // const struct plrDevAPI_t *plrDevAPI = &wasm_plrDevAPI;  // Now provided by deviplay.c
@@ -1160,8 +823,6 @@ void wasm_audio_tick(void) {
     tmTimerHandler(pollTypeAudio);
 }
 
-// Global early initialization flag
-static int wasm_functions_initialized = 0;
 // Global playing state for WASM
 extern int g_is_playing; // Defined in wasm-fileio.c
 
@@ -1300,15 +961,19 @@ int wasm_mcpGet(struct cpifaceSessionAPI_t *cpifaceSession, int ch, int opt) {
         if (ch == -1 && opt == mcpGTimer) {
             int latency_ms = wasm_get_current_audio_latency_ms();
             int offset_ticks = (latency_ms * 65536) / 1000;
+#ifdef OCP_WASM_DEBUG_LOGGING
             fprintf(stderr, "[WASM] mcpGTimer: real=%d, latency=%dms, offset=%d ticks, result=%d\n",
                     real_value, latency_ms, offset_ticks, real_value - offset_ticks);
+#endif
             real_value -= offset_ticks;
         }
 
         return real_value;
     }
 
+#ifdef OCP_WASM_DEBUG_LOGGING
     fprintf(stderr, "[WASM] mcpGet fallback: ch=%d, opt=%d (no original_player_mcpGet)\n", ch, opt);
+#endif
 
     // Return reasonable default values for different options if no player mcpGet
     if (ch == -1) {
@@ -1322,21 +987,6 @@ int wasm_mcpGet(struct cpifaceSessionAPI_t *cpifaceSession, int ch, int opt) {
         }
     }
     return 0;
-}
-
-// Early initialization function - call this before any file loading
-void wasm_initialize_early(void) {
-    if (wasm_functions_initialized) {
-        return;
-    }
-
-    // Ensure global mcpDevAPI is properly set before any file loading
-    // This is needed because the OCP system expects these to be available
-    extern const struct mcpDevAPI_t *mcpDevAPI;
-    extern const struct mcpAPI_t *mcpAPI;
-    extern const struct plrDevAPI_t *plrDevAPI;
-
-    wasm_functions_initialized = 1;
 }
 
 // dmFile is now provided by filesel/filesystem-unix.c (real implementation)
@@ -1399,12 +1049,6 @@ void cpiWurfel2Done(void) {
 
 // External symbol references for MOD player
 extern struct linkinfostruct dllextinfo;
-struct linkinfostruct dllextinfo_playxm = {
-    .name = "playxm", 
-    .desc = "XM/MOD Player",
-    .ver = DLLVERSION
-};
-
 // plrRegisterDriver is now provided by dev/deviplay.c
 // mcpRegisterDriver is now provided by dev/deviwave.c
 
@@ -1427,11 +1071,6 @@ void debug_fsTypeRegister(struct moduletype modtype, const char **description, c
     fsTypeRegister(modtype, description, interfacename, cp);
 }
 
-// Debug function to print registered file types
-void debug_print_file_types(void) {
-    extern int fsTypesCount; // From pfilesel.c
-}
-
 // iconv stubs removed - MAIN_MODULE=1 provides real implementations from libc
 
 // Keyboard functions are now provided by stuff/poutput-keyboard.c
@@ -1450,17 +1089,8 @@ void filesystem_Z_register() { }
 #ifndef OCP_WASM_HAS_ZIP
 void filesystem_zip_register() { }
 #endif
-// WASM ocpdir implementation for /assets directory
-static struct ocpdir_t wasm_assets_dir = {0};
-static int wasm_assets_dir_initialized = 0;
 
-static void wasm_assets_dir_ref(struct ocpdir_t *self) {
-    // No-op for static directory
-}
 
-static void wasm_assets_dir_unref(struct ocpdir_t *self) {
-    // No-op for static directory
-}
 
 // WASM ocpfile wrapper for files in /assets
 struct wasm_ocpfile_t {
@@ -1469,63 +1099,9 @@ struct wasm_ocpfile_t {
     uint32_t dirdb_ref;
 };
 
-static void wasm_ocpfile_ref(struct ocpfile_t *_self) {
-    // No-op for now
-}
 
-static void wasm_ocpfile_unref(struct ocpfile_t *_self) {
-    struct wasm_ocpfile_t *self = (struct wasm_ocpfile_t *)_self;
-    extern const struct dirdbAPI_t dirdbAPI;
-    if (self->dirdb_ref != DIRDB_NOPARENT && self->dirdb_ref != 0) {
-        dirdbAPI.Unref(self->dirdb_ref, dirdb_use_file);
-    }
-    free(self->filepath);
-    free(self);
-}
 
-static struct ocpfilehandle_t *wasm_ocpfile_open(struct ocpfile_t *_self) {
-    struct wasm_ocpfile_t *self = (struct wasm_ocpfile_t *)_self;
-    extern struct ocpfilehandle_t *wasm_file_open_readfile(const char *path);
-    return wasm_file_open_readfile(self->filepath);
-}
 
-static struct ocpfile_t *wasm_assets_dir_readdir_file(struct ocpdir_t *self, uint32_t dirdb_ref) {
-    // Get the filename from dirdb
-    extern const struct dirdbAPI_t dirdbAPI;
-    char *filename = NULL;
-    char fullpath[256];
-    struct wasm_ocpfile_t *retval = NULL;
-
-    dirdbAPI.GetName_malloc(dirdb_ref, &filename);
-    if (!filename) {
-        return NULL;
-    }
-
-    // Build full path: /assets/<filename>
-    snprintf(fullpath, sizeof(fullpath), "/assets/%s", filename);
-    // Create ocpfile_t wrapper
-    retval = malloc(sizeof(struct wasm_ocpfile_t));
-    if (!retval) {
-        free(filename);
-        return NULL;
-    }
-
-    memset(retval, 0, sizeof(*retval));
-    retval->head.ref = wasm_ocpfile_ref;
-    retval->head.unref = wasm_ocpfile_unref;
-    retval->head.open = wasm_ocpfile_open;
-    retval->head.dirdb_ref = dirdb_ref;
-    retval->filepath = strdup(fullpath);
-    retval->dirdb_ref = dirdb_ref;
-
-    // Ref the dirdb entry
-    dirdbAPI.Ref(dirdb_ref, dirdb_use_file);
-
-    free(filename);
-
-    printf("WASM: Created ocpfile_t for %s (dirdb_ref=%u)\n", fullpath, dirdb_ref);
-    return &retval->head;
-}
 
 // filesystem_unix_init is now provided by filesel/filesystem-unix.c
 // The real implementation will handle /assets, /music, and other directories
@@ -1585,7 +1161,9 @@ void wasm_load_screen_config(int *width, int *height);
 
 // WASM adaptive resize functionality for mirroring Unix platforms
 void wasm_adaptive_resize(int new_width, int new_height) {
+#ifdef OCP_WASM_DEBUG_LOGGING
     printf("WASM: Adaptive resize called with %dx%d\n", new_width, new_height);
+#endif
 
     // Handle edge cases
 
@@ -1597,7 +1175,9 @@ void wasm_adaptive_resize(int new_width, int new_height) {
     // For now, just log if we're in unusual aspect ratios
     double aspect_ratio = (double)new_width / new_height;
     if (aspect_ratio < 0.5 || aspect_ratio > 3.0) {
+#ifdef OCP_WASM_DEBUG_LOGGING
         printf("WASM: Unusual aspect ratio %.2f detected\n", aspect_ratio);
+#endif
     }
 
     // Call the underlying SDL2 resize logic to update Console.TextWidth/TextHeight
@@ -1619,8 +1199,10 @@ void wasm_adaptive_resize(int new_width, int new_height) {
         Console.GraphLines = new_height;
         Console.CurrentFont = _8x16;
 
+#ifdef OCP_WASM_DEBUG_LOGGING
         printf("WASM: Fallback resize - TextWidth=%d, TextHeight=%d, GraphBytesPerLine=%d\n",
                Console.TextWidth, Console.TextHeight, Console.GraphBytesPerLine);
+#endif
     }
 
     // Save configuration for next session
@@ -1655,12 +1237,6 @@ void wasm_load_screen_config(int *width, int *height) {
         }
         return 600;
     });
-}
-
-// Hook into the WASM resize event system
-void wasm_register_resize_hook(void) {
-    // This will be called from the main interface initialization
-    printf("WASM: Resize hook registered for adaptive drawing\n");
 }
 
 // File selector interface functions now provided by filesel/pfilesel.c:

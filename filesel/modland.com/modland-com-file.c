@@ -196,11 +196,13 @@ static int curl_download_magic (const char *targetfilename, const char *sourcepa
 {
 	char *url;
 	char *escaped;
+#ifndef WASM_BUILD
 	struct download_request_t *request;
 	struct ocpfilehandle_t *temp_filehandle;
 	struct osfile_t *target;
 	char buffer[65536];
 	int fill;
+#endif
 	size_t len;
 
 	escaped = urlencode (sourcepath);

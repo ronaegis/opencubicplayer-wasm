@@ -21,7 +21,8 @@ struct URL_module url_pipe_module = {
     URL_pipe_t,			/* type */
     url_pipe_check,		/* URL checker */
     NULL,			/* initializer */
-    NULL			/* open */
+    NULL,			/* open */
+    NULL			/* chain */
 };
 
 /* Dummy implementation with correct signature for WASM */

@@ -22,7 +22,7 @@ Production flags from `CMakeLists.txt`: `-O3`, assertions off, `INITIAL_MEMORY` 
 
 The script writes `build/ocp.js`, `build/ocp.wasm`, `build/ocp.data`, one `.wasm` side module per plugin, `index.html`, `visitor-file.js`, `COPYING`, and `UNIFONT-LICENSE.txt`.
 
-`ocp.data` is the GNU Unifont file, the help database, `adplug.db`, and the prebuilt Modland catalog. It does not contain sample music.
+`ocp.data` is the GNU Unifont file, the default `ocp.ini`, the help database, `adplug.db`, and the prebuilt Modland catalog. It does not contain sample music.
 
 Serve the build directory over HTTP. Opening the HTML from `file://` will not start the module.
 
@@ -41,14 +41,21 @@ What to upload, how to serve it, and how to choose plugins: [HOSTING.md](HOSTING
 - Audio is Emscripten SDL2, which uses `ScriptProcessorNode`. There is no AudioWorklet processor in this tree.
 - "Open a module from this computer", or a drop on that box, calls `ocpStoreVisitorFile` in `visitor-file.js`. That writes the bytes under `/music` on the Emscripten filesystem. `filesel/filesystem-unix.c` lists that directory with `opendir`. Open the file from the on-canvas selector.
 - F during playback returns to the selector. In this browser build, Esc returns to the selector. Other keys are the desktop player's keys inside the canvas. Press F1 there for the in-player list.
-- IDBFS is mounted at `/home/web_user/.ocp`. Closing the tab can drop the last write, because the page's unload sync is asynchronous.
+- IDBFS is mounted at `/home/web_user/.ocp`. The player reads `ocp.ini` from there on every load, so settings changed in the in-player setup persist. The page starts a save when it is hidden or closed. The save is asynchronous, so a browser that closes the tab first can still drop it.
+- A click on the canvas only gives it keyboard focus. The desktop player's click-to-open and right-click fullscreen are off in this build.
 - There is no service worker.
 
 Not in this browser build: Audio CD, MusicBrainz lookups, gzip, tar, bzip2, pak, the cube visualiser, and TGA pictures. Zip is compiled. Bzip2 members inside zip are not.
 
 ## Tests
 
-Puppeteer drives `wasm/tests/test-canvas-rendering.html` and `wasm/tests/test-sound-output.html`. It does not load `index.html`. Jest checks symbols in `cpiface-wrapper.test.js` and can skip `nm` / `wasm-objdump`. `test-visitor-file.js` loads the shipped `index.html` and checks `/music`.
+`npm test` runs five things against `wasm/build`:
+
+- `test-runner.js` drives `test-canvas-rendering.html` and `test-sound-output.html` with Puppeteer. These are test pages, not `index.html`.
+- `test-visitor-file.js` loads the shipped `index.html` and checks that a visitor file lands in `/music`.
+- `test-config-roundtrip.js` saves a different player device order into `ocp.ini`, reloads, and checks that the player used it.
+- `test-playback.js` opens a demo module on the shipped page with a click and the keyboard, and checks for sound, no page errors, and working F1 and Escape.
+- Jest checks the wrapped cpiface symbols in the compiled object, the page contract, and the dynCall list.
 
 ```bash
 cd wasm/tests

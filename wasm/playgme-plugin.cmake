@@ -89,8 +89,6 @@ target_compile_definitions(playgme-module PRIVATE
     HAVE_ZLIB_H=1
     BLARGG_LITTLE_ENDIAN=1
     OCP_MAJOR_VERSION=3
-    OCP_MINOR_VERSION=0
-    OCP_PATCH_VERSION=1
     VERSION="3.0.1-WASM"
 )
 

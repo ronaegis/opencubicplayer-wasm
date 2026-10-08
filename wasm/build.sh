@@ -10,8 +10,10 @@ usage() {
 Usage: ./build.sh [options]
 
 Options:
-  -c, --clean        Remove the build directory and cached artifacts, then exit.
-  -h, --help         Show this help message and exit.
+  -c, --clean          Remove the build directory and emscripten cache, then exit.
+                       Keeps wasm/.modland-cache so the next build stays reproducible.
+  --update-modland   Download a fresh Modland catalog instead of the cached zip.
+  -h, --help           Show this help message and exit.
 
 Build Configurations:
   --production       Production build optimized for deployment (default)
@@ -38,6 +40,8 @@ Build Configurations:
 Notes:
   - If no build configuration is specified, --production is used by default.
   - Build configurations can be combined with --clean.
+  - The Modland catalog is cached in wasm/.modland-cache. Set OCP_MODLAND_UPDATE=1
+    or pass --update-modland to fetch a new allmods.zip. --clean does not delete it.
 EOT
 }
 
@@ -48,6 +52,7 @@ fi
 
 # Parse command line arguments
 CLEAN_ONLY=0
+UPDATE_MODLAND=0
 BUILD_CONFIG="production"  # Default configuration
 INCLUDE_SAMPLES=0
 
@@ -55,6 +60,9 @@ for arg in "$@"; do
     case "$arg" in
         -c|--clean)
             CLEAN_ONLY=1
+            ;;
+        --update-modland)
+            UPDATE_MODLAND=1
             ;;
         --debug)
             BUILD_CONFIG="debug"
@@ -153,16 +161,29 @@ fi
 
 echo ""
 echo "Building the Modland catalog..."
-MODLAND_ZIP="${BUILD_DIR}/.allmods.zip"
+MODLAND_CACHE="${SCRIPT_DIR}/.modland-cache"
+MODLAND_ZIP="${MODLAND_CACHE}/allmods.zip"
 MODLAND_TXT="${BUILD_DIR}/.allmods.txt"
 MODLAND_DAT_DIR="${BUILD_DIR}/.modland-dat"
-if curl -fsSL -A "OpenCubicPlayer" -o "${MODLAND_ZIP}.partial" "https://modland.com/allmods.zip"; then
-    mv -f "${MODLAND_ZIP}.partial" "${MODLAND_ZIP}"
-else
-    rm -f "${MODLAND_ZIP}.partial"
-    echo "Warning: could not download allmods.zip" >&2
+mkdir -p "${MODLAND_CACHE}" "${BUILD_DIR}"
+if [[ "${OCP_MODLAND_UPDATE:-0}" == "1" ]]; then
+    UPDATE_MODLAND=1
 fi
-if [[ -f "${MODLAND_ZIP}" ]]; then
+if [[ ${UPDATE_MODLAND} -eq 1 || ! -f "${MODLAND_ZIP}" ]]; then
+    echo "Fetching https://modland.com/allmods.zip"
+    if curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 \
+        -A "OpenCubicPlayer" -o "${MODLAND_ZIP}.partial" "https://modland.com/allmods.zip"; then
+        mv -f "${MODLAND_ZIP}.partial" "${MODLAND_ZIP}"
+    else
+        rm -f "${MODLAND_ZIP}.partial"
+        echo "Warning: could not download allmods.zip" >&2
+    fi
+else
+    echo "Using cached Modland catalog ${MODLAND_ZIP}"
+fi
+if [[ -f "${MODLAND_ZIP}" && -f "${BUILD_DIR}/CPMDLAND.DAT" && ! "${MODLAND_ZIP}" -nt "${BUILD_DIR}/CPMDLAND.DAT" ]]; then
+    echo "CPMDLAND.DAT is already newer than the cached catalog"
+elif [[ -f "${MODLAND_ZIP}" ]]; then
     MODLAND_DATE="$(unzip -l "${MODLAND_ZIP}" allmods.txt | awk '/allmods.txt$/ {print $2; exit}')"
     if [[ "${MODLAND_DATE}" =~ ^([0-9]{2})-([0-9]{2})-([0-9]{4})$ ]]; then
         MODLAND_YEAR="${BASH_REMATCH[3]}"
@@ -184,7 +205,7 @@ if [[ -f "${MODLAND_ZIP}" ]]; then
     mkdir -p "${MODLAND_DAT_DIR}"
     "${BUILD_DIR}/modland-makedb" "${MODLAND_TXT}" "${MODLAND_DAT_DIR}/" "${MODLAND_YEAR}" "${MODLAND_MONTH}" "${MODLAND_DAY}"
     mv -f "${MODLAND_DAT_DIR}/CPMDLAND.DAT" "${BUILD_DIR}/CPMDLAND.DAT"
-    rm -rf "${MODLAND_DAT_DIR}" "${MODLAND_TXT}" "${MODLAND_ZIP}" "${BUILD_DIR}/modland-makedb"
+    rm -rf "${MODLAND_DAT_DIR}" "${MODLAND_TXT}" "${BUILD_DIR}/modland-makedb"
     echo "Built ${BUILD_DIR}/CPMDLAND.DAT"
 elif [[ -f "${BUILD_DIR}/CPMDLAND.DAT" ]]; then
     echo "Warning: keeping the CPMDLAND.DAT already in ${BUILD_DIR}" >&2

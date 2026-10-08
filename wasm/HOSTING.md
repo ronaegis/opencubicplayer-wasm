@@ -30,7 +30,7 @@ Submodules the browser build compiles: `playsid/libsidplayfp-git`, `playsid/libr
 
 Those switches are `WASM_PRODUCTION_BUILD`, `WASM_INCLUDE_HELP`, `WASM_INCLUDE_ADPLUG_DB`, and `WASM_INCLUDE_SAMPLES`. Sample files are copied by `build.sh`. The CMake option only records that the copy was requested. `OCP_WASM_DEBUG_LOGGING` is off unless you pass `-DOCP_WASM_DEBUG_LOGGING=ON` to CMake yourself.
 
-`ocp.data` is the font, and on a production build the help database, `adplug.db`, and the prebuilt Modland catalog. It does not contain the demo modules.
+`ocp.data` is the font and the default `ocp.ini`, and on a production build the help database, `adplug.db`, and the prebuilt Modland catalog. It does not contain the demo modules.
 
 ## Files to upload
 
@@ -44,7 +44,7 @@ A production build of this tree is about 35 MB, of which `ocp.data` is about 25 
 | `visitor-file.js` | Writes a file the visitor picked into the in-browser `/music` directory |
 | `ocp.js` | Emscripten loader |
 | `ocp.wasm` | Player core. Must be from the same build as every side module |
-| `ocp.data` | Unifont, help, AdPlug database, and the prebuilt Modland catalog |
+| `ocp.data` | Unifont, the default `ocp.ini`, help, AdPlug database, and the prebuilt Modland catalog |
 | `*.wasm` beside `ocp.js` | One side module per plugin |
 | `COPYING` | GPL-2 |
 | `UNIFONT-LICENSE.txt` | Font terms |
@@ -139,9 +139,9 @@ Set the content type of every `.wasm` object to `application/wasm` at upload tim
 
 ## What the browser loads
 
-1. `index.html` loads `ocp.js?v=13`.
-2. `locateFile` in that page loads `ocp.wasm` and `ocp.data`, and appends `?v=13`.
-3. The page fetches every `url` in `wasmPluginManifest`, appends `?v=13`, and writes the bytes to `/program/autoload/<name>.wasm` in the in-browser filesystem.
+1. `index.html` loads `ocp.js` with `?v=` and the value of `OCP_ASSET_VERSION`, a constant near the top of the page script.
+2. `locateFile` in that page loads `ocp.wasm` and `ocp.data`, and appends the same token.
+3. The page fetches every `url` in `wasmPluginManifest`, appends the same token, and writes the bytes to `/program/autoload/<name>.wasm` in the in-browser filesystem.
 4. `wasm_start_ocp` loads every side module in that directory.
 5. The page fetches `sample-files/manifest.json` with `cache: 'no-cache'`. A missing manifest is a console warning. The player still starts, and the demo songs are absent. "Open a module from this computer" still works.
 
@@ -189,7 +189,7 @@ The names are case-sensitive. The first loaded driver that detects hardware is t
 
 `freverb.wasm` and `ireverb.wasm` are the reverb effects. The player starts without them.
 
-Saved settings from the in-player setup go to `/home/web_user/.ocp` in that browser (IndexedDB). The two device lines above are written again on the next load. There is no server-side `ocp.ini`. Closing the tab can drop the last write.
+Saved settings from the in-player setup go to `/home/web_user/.ocp` in that browser (IndexedDB). On a first visit the page copies the default `ocp.ini` that `ocp.data` carries (`wasm/ocp-default.ini`) into that directory, and the player reads it on every load. The two device lines above are filled in again only when a saved file does not name the browser drivers. There is no server-side `ocp.ini`. The page starts a save when it is hidden or closed. The save is asynchronous, so a browser that closes the tab first can still drop it.
 
 ### Format plugins
 
@@ -226,7 +226,7 @@ Audio CD, MusicBrainz lookups, gzip, tar, bzip2, and pak archives, the cube visu
 ## Replacing a published build
 
 1. Run `./wasm/build.sh` with the same Emscripten version.
-2. In `wasm/index.html`, raise the same token in all three places: `fetch(plugin.url + '?v=13')`, the `?v=13` appended by `locateFile` for `.wasm` and `.data`, and `<script src="ocp.js?v=13">`.
+2. In `wasm/index.html`, raise `OCP_ASSET_VERSION`. Every versioned request reads that one constant.
 3. Upload `index.html` together with `ocp.js`, `ocp.wasm`, `ocp.data`, and every side module from that build.
 4. In the browser network panel, `ocp.wasm` and each listed plugin return 200. The status line reaches ready. Open one file from the selector, and open one demo entry when `sample-files/` is part of the upload.
 

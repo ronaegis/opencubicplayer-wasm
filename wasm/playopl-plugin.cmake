@@ -173,7 +173,5 @@ target_compile_definitions(playopl-module PRIVATE
     HAVE_STRCASECMP=1
     stricmp=strcasecmp
     OCP_MAJOR_VERSION=3
-    OCP_MINOR_VERSION=0
-    OCP_PATCH_VERSION=1
     VERSION=\"${ADPLUG_VERSION_VALUE}-WASM\"
 )

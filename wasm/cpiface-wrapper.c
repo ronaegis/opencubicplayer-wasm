@@ -20,7 +20,7 @@
  * VALIDATION LAYERS:
  *   1. Compile-time: Static assertions, symbol existence checks
  *   2. Build-time: Symbol export verification (npm test)
- *   3. Runtime: Circular reference checks, NULL validation
+ *   3. Runtime: Circular reference checks
  *
  * Last updated: 2025-10-15
  */
@@ -448,11 +448,6 @@ static int wasm_plmpLateInit(struct PluginInitAPI_t *API)
 
     if (cpiface_original_plOpenCP.Init == wasm_plmpOpenFile) {
         fprintf(stderr, "ERROR: cpiface-wrapper.c: Circular reference detected in Init callback\n");
-        return -1;
-    }
-
-    if (!cpiface_original_plmpLateInit) {
-        fprintf(stderr, "ERROR: cpiface-wrapper.c: cpiface_original_plmpLateInit is NULL\n");
         return -1;
     }
 

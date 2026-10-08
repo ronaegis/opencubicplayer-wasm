@@ -203,7 +203,7 @@ On a desktop build the listing is fetched with `curl` from `setup.dev`. In the b
 2. Open a directory, then a file. Opening a file downloads that module from the mirror.
 3. To replace the stored catalog, highlight `setup.dev`, press Enter, and choose **2. Refresh database**.
 
-The database is stored in this browser at `/home/web_user/.ocp/data/`. The page writes that directory through IndexedDB. Closing the tab can drop the last write. `modland.wasm` has to be present on the host. Hosting is covered in `wasm/HOSTING.md`.
+The database is stored in this browser at `/home/web_user/.ocp/data/`. The page writes that directory through IndexedDB and starts a save when it is hidden or closed. A browser that closes the tab first can still drop that save. `modland.wasm` has to be present on the host. Hosting is covered in `wasm/HOSTING.md`.
 
 ## Manual Page
 

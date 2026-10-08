@@ -90,6 +90,19 @@ async function main() {
             waitUntil: 'domcontentloaded',
             timeout: 120000
         });
+        const contract = await page.evaluate(() => ({
+            fatal: typeof window.ocpShowFatalError === 'function',
+            text: document.body.innerText
+        }));
+        if (!contract.fatal) {
+            throw new Error('page is missing ocpShowFatalError');
+        }
+        if (!/modland\.com/i.test(contract.text)) {
+            throw new Error('page does not disclose modland.com');
+        }
+        if (!/640/.test(contract.text)) {
+            throw new Error('page does not mention the 640 pixel canvas');
+        }
         await page.waitForFunction(() => {
             return typeof ocpStoreVisitorFile === 'function' &&
                 window.Module && window.Module.calledRun && window.Module.FS &&

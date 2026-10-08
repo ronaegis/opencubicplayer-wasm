@@ -17,8 +17,5 @@ int wasm_download_sample_if_needed(const char *path);
 
 // WASM exports for JavaScript
 extern void write_file_data(const char *path, const unsigned char *data, int length);
-extern void play(void);
-extern void pause_playback(void);
-extern void stop(void);
 
 #endif // WASM_FILEIO_H
