@@ -45,6 +45,7 @@ jobs:
           path: |
             wasm/build/index.html
             wasm/build/visitor-file.js
+            wasm/build/social-preview-v1.png
             wasm/build/ocp.js
             wasm/build/ocp.wasm
             wasm/build/*.wasm
