@@ -42,7 +42,7 @@ A production build of this tree is about 35 MB, of which `ocp.data` is about 25 
 | --- | --- |
 | `index.html` | Page, canvas, and plugin list |
 | `visitor-file.js` | Writes a file the visitor picked into the in-browser `/music` directory |
-| `social-preview-v1.png` | Playback screenshot used by X and Open Graph link previews |
+| `social-preview-v2.png` | Playback screenshot used by X and Open Graph link previews |
 | `ocp.js` | Emscripten loader |
 | `ocp.wasm` | Player core. Must be from the same build as every side module |
 | `ocp.data` | Unifont, the default `ocp.ini`, help, AdPlug database, and the prebuilt Modland catalog |

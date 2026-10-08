@@ -223,7 +223,7 @@ emmake make -C "${BUILD_DIR}"
 echo "Copying web interface..."
 cp -f "${SCRIPT_DIR}/index.html" "${BUILD_DIR}/"
 cp -f "${SCRIPT_DIR}/visitor-file.js" "${BUILD_DIR}/"
-cp -f "${SCRIPT_DIR}/social-preview-v1.png" "${BUILD_DIR}/"
+cp -f "${SCRIPT_DIR}/social-preview-v2.png" "${BUILD_DIR}/"
 cp -f "${SCRIPT_DIR}/../COPYING" "${BUILD_DIR}/COPYING"
 cp -f "${SCRIPT_DIR}/UNIFONT-LICENSE.txt" "${BUILD_DIR}/UNIFONT-LICENSE.txt"
 
