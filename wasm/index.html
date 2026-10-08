@@ -436,7 +436,7 @@
     <script src="visitor-file.js"></script>
     <script>
         let isWasmLoaded = false;
-        var OCP_ASSET_VERSION = '14';
+        var OCP_ASSET_VERSION = '15';
         window.ocpFatalShown = false;
 
         window.ocpShowFatalError = function(message) {
@@ -1425,33 +1425,18 @@
                 return;
             }
             var canvas = document.getElementById('canvas');
-            var instructions = document.querySelector('.instructions');
             if (!canvas) {
                 return;
             }
-            var anchor = canvas.closest('.screen') || canvas;
             var top = canvas.getBoundingClientRect().top + window.scrollY;
-            var below = 0;
-            var node = anchor.nextElementSibling;
-            while (node) {
-                if (node !== instructions && node.id !== 'loading' && node.tagName !== 'SCRIPT') {
-                    var cs = getComputedStyle(node);
-                    if (cs.display !== 'none') {
-                        below += node.getBoundingClientRect().height;
-                        below += (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
-                    }
-                }
-                node = node.nextElementSibling;
-            }
-            var anchorStyle = getComputedStyle(anchor);
             var bodyStyle = getComputedStyle(document.body);
-            below += (parseFloat(anchorStyle.marginTop) || 0) + (parseFloat(anchorStyle.marginBottom) || 0);
-            below += parseFloat(bodyStyle.paddingBottom) || 0;
+            var padBottom = parseFloat(bodyStyle.paddingBottom) || 0;
             var padX = (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0);
+            /* Give the player the viewport below the header; controls can scroll below it. */
             /* 80 columns need 640px. A shorter grid makes SDL grow the bitmap to 640x160 and the browser scales that. */
-            var availW = Math.floor(window.innerWidth - padX);
-            var scrollbar = (640 + padX > window.innerWidth) ? 16 : 0;
-            var availH = Math.floor(window.innerHeight - top - below - scrollbar);
+            var availW = Math.floor(document.documentElement.clientWidth - padX);
+            var scrollbar = (640 + padX > document.documentElement.clientWidth) ? 16 : 0;
+            var availH = Math.floor(window.innerHeight - top - padBottom - scrollbar);
             var size = chooseCanvasSize(availW, availH);
             canvas.style.width = size.width + 'px';
             canvas.style.height = size.height + 'px';

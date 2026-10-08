@@ -423,6 +423,11 @@ static void set_state_textmode (const int fullscreen, int width, int height, con
 	}
 
 	Console.TextWidth         = width /FontSizeInfo[Console.CurrentFont].w;
+	/* Live resizes must respect the fixed-size rows used by text views. */
+	if (Console.TextWidth > CONSOLE_MAX_X)
+	{
+		Console.TextWidth = CONSOLE_MAX_X;
+	}
 	Console.TextHeight        = height/FontSizeInfo[Console.CurrentFont].h;
 	Console.GraphBytesPerLine = width;
 	Console.GraphLines        = height;

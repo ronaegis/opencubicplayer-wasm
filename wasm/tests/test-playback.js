@@ -118,7 +118,12 @@ async function main() {
         const page = await browser.newPage();
         await page.setViewport({ width: 1400, height: 950 });
         const pageErrors = [];
-        page.on('pageerror', (err) => pageErrors.push(err.message));
+        page.on('console', (msg) => {
+            if (msg.type() === 'error' && msg.text().includes('wasm_main_loop')) {
+                pageErrors.push(msg.text());
+            }
+        });
+        page.on('pageerror', (err) => pageErrors.push(err.stack || err.message));
 
         await page.goto('http://127.0.0.1:' + port + '/index.html', {
             waitUntil: 'domcontentloaded',
@@ -163,6 +168,25 @@ async function main() {
             throw new Error('the module opened but the output is silent (peak ' + peak + ')');
         }
 
+        // Resizing during playback must keep the framebuffer and layout in sync.
+        for (const ratio of ['full', '4:3', '16:9', 'full']) {
+            const beforeResize = await playerState(page);
+            await page.click('#ratio-control button[data-ratio="' + ratio + '"]');
+            await wait(1000);
+            const resized = await playerState(page);
+            const canvasWidth = await page.$eval('#canvas', canvas => canvas.width);
+            if (ratio === 'full' && canvasWidth <= 132 * 8) {
+                throw new Error('Full did not exercise a screen wider than the old 132-column limit');
+            }
+            if (pageErrors.length || resized.fatal || !(resized.frames > beforeResize.frames)) {
+                throw new Error('playback stopped after selecting ' + ratio + ': ' + (pageErrors[0] || 'fatal or stalled loop'));
+            }
+            if (!((await outputPeak(page)) > 0.001)) {
+                throw new Error('audio stopped after selecting ' + ratio);
+            }
+        }
+        await page.click('#canvas');
+
         // Keys the old hand-written key map dropped: F1 opens help, Escape
         // closes it. The loop has to keep running through both.
         await page.keyboard.press('F1');
@@ -179,7 +203,7 @@ async function main() {
             throw new Error('the main loop stopped after F1 and Escape');
         }
 
-        console.log('playback: PASS opened a demo module, output peak ' + peak.toFixed(3) + ', keys handled');
+        console.log('playback: PASS opened a demo module, output peak ' + peak.toFixed(3) + ', live resizing and keys handled');
     } finally {
         await browser.close();
         await new Promise((resolve) => server.close(resolve));

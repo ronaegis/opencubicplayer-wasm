@@ -47,7 +47,8 @@ char *getwd(char *buf);
 /* Console display constants. Upstream dialogs require CONSOLE_MIN_Y >= 20. */
 #define CONSOLE_MIN_X 80
 #define CONSOLE_MIN_Y 20
-#define CONSOLE_MAX_X 132
+/* Match desktop row buffers; browser resizes regularly exceed 132 columns. */
+#define CONSOLE_MAX_X 1024
 #define CONSOLE_MAX_Y 60
 
 /* Audio system constants for smpman.c */

@@ -15,7 +15,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <emscripten.h>
-#include <emscripten/html5.h>
 #include "types.h"
 
 // OCP headers
@@ -63,10 +62,6 @@ static int should_stop = 0;
 // Forward declarations
 static int wasm_load_and_init_interface(const char *virtual_path);
 static void wasm_close_interface(void);
-
-// External functions for adaptive resize and config (implemented in wasm-stubs.c)
-extern void wasm_adaptive_resize(int new_width, int new_height);
-extern void wasm_load_screen_config(int *width, int *height);
 
 // WASM exported functions
 EMSCRIPTEN_KEEPALIVE
@@ -372,79 +367,6 @@ void wasm_interface_main_loop(void) {
 	}
 }
 
-// Canvas resize handling
-static EM_BOOL wasm_resize_handler(int eventType, const EmscriptenUiEvent *uiEvent, void *userData) {
-    int canvasWidth, canvasHeight;
-
-	// Get current canvas size from browser
-	emscripten_get_canvas_element_size("#canvas", &canvasWidth, &canvasHeight);
-
-	/* SDL's Emscripten window probe and destroy path report 0x0 or 1x1.
-	 * Saving that locks the next launch to the clamped 320x240 minimum. */
-	if (canvasWidth < 320 || canvasHeight < 240)
-		return EM_TRUE;
-
-    // Update canvas backing store size to match
-    emscripten_set_canvas_element_size("#canvas", canvasWidth, canvasHeight);
-
-    // Call adaptive resize to update Console.TextWidth/TextHeight like Unix platforms
-    wasm_adaptive_resize(canvasWidth, canvasHeight);
-
-    // Trigger screen mode reset to adapt to new size
-    cpiResetScreen();
-
-    return EM_TRUE;
-}
-
-// Fullscreen change handling
-static EM_BOOL wasm_fullscreen_change_handler(int eventType, const EmscriptenFullscreenChangeEvent *fullscreenChangeEvent, void *userData) {
-
-    // Update canvas size on fullscreen changes
-    if (fullscreenChangeEvent->isFullscreen) {
-        // In fullscreen, use the screen size
-        emscripten_set_canvas_element_size("#canvas",
-                                         fullscreenChangeEvent->screenWidth,
-                                         fullscreenChangeEvent->screenHeight);
-        wasm_adaptive_resize(fullscreenChangeEvent->screenWidth, fullscreenChangeEvent->screenHeight);
-    } else {
-        // Out of fullscreen, restore to element size
-        emscripten_set_canvas_element_size("#canvas",
-                                         fullscreenChangeEvent->elementWidth,
-                                         fullscreenChangeEvent->elementHeight);
-        wasm_adaptive_resize(fullscreenChangeEvent->elementWidth, fullscreenChangeEvent->elementHeight);
-    }
-
-    cpiResetScreen();
-    return EM_TRUE;
-}
-
-// Detect initial resolution and setup resize handling
-static void wasm_detect_initial_resolution(void) {
-	int canvasWidth, canvasHeight;
-
-	// Get initial canvas size
-	if (emscripten_get_canvas_element_size("#canvas", &canvasWidth, &canvasHeight) != EMSCRIPTEN_RESULT_SUCCESS) {
-		// Fallback to saved config or defaults
-		int savedWidth, savedHeight;
-		wasm_load_screen_config(&savedWidth, &savedHeight);
-
-		canvasWidth = savedWidth;
-		canvasHeight = savedHeight;
-
-		// Set the canvas to the loaded size
-		emscripten_set_canvas_element_size("#canvas", canvasWidth, canvasHeight);
-	}
-
-	// Set initial adaptive sizing - mirrors Unix platform behavior
-	wasm_adaptive_resize(canvasWidth, canvasHeight);
-
-	// Register resize callback for adaptive resizing
-	emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, NULL, EM_TRUE, wasm_resize_handler);
-
-	// Register fullscreen change callback
-	emscripten_set_fullscreenchange_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, NULL, EM_TRUE, wasm_fullscreen_change_handler);
-}
-
 // Initialize the WASM interface system
 int wasm_interface_init(void) {
 
@@ -464,8 +386,9 @@ int wasm_interface_init(void) {
     // File system initialization is now handled in wasm-original-main.c
     // (fsPreInit, fsInit, fsLateInit are called there with proper configAPI)
 
-    // Set up adaptive canvas resizing
-    wasm_detect_initial_resolution();
+    // SDL owns canvas resizing, framebuffer allocation and VIRT_KEY_RESIZE.
+    // Do not change Console dimensions from browser event callbacks: the
+    // renderer may still be using the framebuffer allocated for the old size.
 
     return 0;
 }
@@ -473,4 +396,3 @@ int wasm_interface_init(void) {
 // Start the main loop
 void wasm_interface_start(void) {
 }
-
