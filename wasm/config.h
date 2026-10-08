@@ -62,8 +62,11 @@ char *getwd(char *buf);
 #define HAVE_STRVERSCMP 1
 int strverscmp(const char *s1, const char *s2);
 
-/* SDL2 support - emscripten uses SDL.h directly */
+/* SDL2 support - emscripten uses SDL.h directly.
+ * host-makedb/config.h reuses this file for a tool that has no SDL. */
+#ifndef OCP_HOST_TOOL
 #include <SDL.h>
+#endif
 
 /* Debug print macro: opt-in for verbose logging to avoid spamming browser consoles */
 #ifndef PRINT
