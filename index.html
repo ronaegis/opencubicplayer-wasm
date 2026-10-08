@@ -173,6 +173,18 @@
             flex: 0 0 auto;
         }
 
+        .page-notes {
+            background-color: var(--raise);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 16px 20px 8px;
+            margin: 16px auto 0;
+            max-width: 760px;
+            width: 100%;
+            box-sizing: border-box;
+            flex: 0 0 auto;
+        }
+
         .instructions h2 {
             color: var(--text);
             margin: 0 0 10px;
@@ -224,6 +236,22 @@
             margin: 0 0 12px;
             display: none;
             flex: 0 0 auto;
+        }
+
+        .notice {
+            color: var(--muted);
+            text-align: center;
+            font-size: 13px;
+            margin: 0 0 8px;
+            flex: 0 0 auto;
+        }
+
+        .notice.is-narrow {
+            color: #ffb4b4;
+            background-color: #2a1214;
+            border: 1px solid #6b2a30;
+            border-radius: 12px;
+            padding: 10px 12px;
         }
 
         .visitor-file {
@@ -396,10 +424,6 @@
         Ready - launch the in-player file selector to begin
     </div>
 
-    <p class="hosting">
-        <a href="https://github.com/ronaegis/opencubicplayer-wasm/blob/release/ocp-wasm-0.1.0/wasm/HOSTING.md">How to host this page</a>
-    </p>
-
     <div class="visitor-file" id="visitor-file">
         <div>
             <p class="file-title">Open a module from this computer</p>
@@ -412,6 +436,80 @@
     <script src="visitor-file.js"></script>
     <script>
         let isWasmLoaded = false;
+        var OCP_ASSET_VERSION = '14';
+        window.ocpFatalShown = false;
+
+        window.ocpShowFatalError = function(message) {
+            window.ocpFatalShown = true;
+            var text = message || 'OpenCubicPlayer failed to start.';
+            var loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.display = 'block';
+                loading.style.opacity = '1';
+                var title = loading.querySelector('p');
+                if (title) {
+                    title.textContent = 'OpenCubicPlayer could not start';
+                }
+                var loadingStatus = document.getElementById('loading-status');
+                if (loadingStatus) {
+                    loadingStatus.textContent = text;
+                }
+            }
+            var errorDiv = document.getElementById('error');
+            if (errorDiv) {
+                errorDiv.textContent = text;
+                errorDiv.style.display = 'block';
+            }
+            var statusLine = document.getElementById('status');
+            if (statusLine) {
+                statusLine.textContent = text;
+            }
+            console.error('[OCP] ' + text);
+        };
+
+        window.ocpShowNotice = function(message) {
+            if (!message || window.ocpFatalShown) {
+                return;
+            }
+            var errorDiv = document.getElementById('error');
+            if (errorDiv) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                clearTimeout(window.ocpNoticeTimer);
+                window.ocpNoticeTimer = setTimeout(function() {
+                    if (!window.ocpFatalShown) {
+                        errorDiv.style.display = 'none';
+                    }
+                }, 10000);
+            }
+            console.warn('[OCP] ' + message);
+        };
+
+        setTimeout(function() {
+            if (!isWasmLoaded && !window.ocpFatalShown) {
+                window.ocpShowFatalError('OpenCubicPlayer is still loading after 45 seconds. A plugin, the module, or IndexedDB may have failed.');
+            }
+        }, 45000);
+
+        (function() {
+            if (!window.matchMedia) {
+                return;
+            }
+            var mq = window.matchMedia('(max-width: 700px), (pointer: coarse)');
+            var apply = function() {
+                var notice = document.getElementById('desktop-notice');
+                if (notice) {
+                    notice.classList.toggle('is-narrow', mq.matches);
+                }
+            };
+            // The notice sits below this script in the page.
+            document.addEventListener('DOMContentLoaded', apply);
+            if (mq.addEventListener) {
+                mq.addEventListener('change', apply);
+            } else if (mq.addListener) {
+                mq.addListener(apply);
+            }
+        })();
 
         function getCanvasElement() {
             return document.getElementById('canvas');
@@ -677,30 +775,25 @@
 
         // Load WASM side modules (plugins)
         async function loadPlugins() {
-            console.log('[Plugin Loader] Loading side modules...');
 
             if (wasmPluginManifest.length === 0) {
-                console.log('[Plugin Loader] No plugins listed in manifest');
                 return;
             }
 
             try {
                 if (!Module.FS.analyzePath('/program').exists) {
                     Module.FS.mkdir('/program');
-                    console.log('[Plugin Loader] Created /program directory');
                 }
 
                 if (!Module.FS.analyzePath('/program/autoload').exists) {
                     Module.FS.mkdir('/program/autoload');
-                    console.log('[Plugin Loader] Created /program/autoload directory');
                 }
 
                 for (const plugin of wasmPluginManifest) {
-                    console.log(`[Plugin Loader] Fetching ${plugin.name} from ${plugin.url}...`);
                     if (window.updateLoadingStatus) {
                         window.updateLoadingStatus(`Loading ${plugin.name}...`);
                     }
-                    const response = await fetch(plugin.url + '?v=13');
+                    const response = await fetch(plugin.url + '?v=' + OCP_ASSET_VERSION);
                     if (!response.ok) {
                         throw new Error(`Failed to fetch ${plugin.url}: ${response.status}`);
                     }
@@ -709,15 +802,12 @@
                     const targetPath = `/program/autoload/${plugin.name}.wasm`;
 
                     if (Module.FS.analyzePath(targetPath).exists) {
-                        console.log(`[Plugin Loader] Overwriting existing ${targetPath}`);
                         Module.FS.unlink(targetPath);
                     }
 
                     Module.FS.writeFile(targetPath, wasmBinary);
-                    console.log(`[Plugin Loader] Staged ${plugin.name} to ${targetPath}`);
                 }
 
-                console.log('[Plugin Loader] Plugins staged successfully');
             } catch (err) {
                 console.error('[Plugin Loader] Error loading plugins:', err);
                 throw err;
@@ -729,7 +819,7 @@
             locateFile: function(path, prefix) {
                 var url = (prefix || '') + path;
                 if (/\.(wasm|data)$/.test(path)) {
-                    url += '?v=13';
+                    url += '?v=' + OCP_ASSET_VERSION;
                 }
                 return url;
             },
@@ -796,7 +886,6 @@
                                 }
 
                                 ensureDir(fs, '/music');
-                                console.log('[Samples] Staging ' + manifest.length + ' on-demand sample files');
 
                                 function registerSampleEntry(info, aliases) {
                                     if (!Array.isArray(aliases)) {
@@ -994,12 +1083,29 @@
                 }
             },
             onRuntimeInitialized: async function() {
-                console.log('OpenCubicPlayer WASM loaded successfully');
 
                 // Load plugins as side modules
                 try {
                     await loadPlugins();
-                    console.log('Plugins loaded successfully');
+
+                    // cfGetConfig runs in the IDBFS populate callback, not in main().
+                    // Plugins can finish first; wait so device setup sees the saved ini.
+                    var startupDeadline = Date.now() + 20000;
+                    var startupReady = false;
+                    while (Date.now() < startupDeadline) {
+                        if (window.ocpFatalShown) {
+                            return;
+                        }
+                        if (typeof Module._wasm_startup_is_complete === 'function' &&
+                            Module._wasm_startup_is_complete()) {
+                            startupReady = true;
+                            break;
+                        }
+                        await new Promise(function(resolve) { setTimeout(resolve, 20); });
+                    }
+                    if (!startupReady) {
+                        throw new Error('OpenCubicPlayer did not finish reading ocp.ini');
+                    }
 
                     let startResult = 0;
                     try {
@@ -1008,7 +1114,6 @@
                         if (err === 'unwind' || err?.message === 'unwind') {
                             // Expected when emscripten installs the main loop.
                             startResult = 0;
-                            console.log('OCP main loop scheduled (unwind).');
                         } else {
                             throw err;
                         }
@@ -1018,10 +1123,9 @@
                         throw new Error(`wasm_start_ocp failed with code ${startResult}`);
                     }
 
-                    console.log('OCP runtime initialized');
                 } catch (err) {
                     console.error('Failed to load plugins:', err);
-                    showError('Failed to load plugins: ' + err);
+                    window.ocpShowFatalError('Failed to load plugins: ' + err);
                     return;
                 }
 
@@ -1060,7 +1164,7 @@
             },
             onAbort: function(what) {
                 console.error('WASM aborted:', what);
-                showError('Failed to load OpenCubicPlayer WASM');
+                window.ocpShowFatalError('Failed to load OpenCubicPlayer WASM');
             }
         };
 
@@ -1068,7 +1172,6 @@
         function initializeAudioContext() {
             // SDL2 in emscripten creates the AudioContext automatically
             // We just need to ensure it's resumed on user interaction
-            console.log('Audio context initialized - ready for user interaction');
         }
 
         function updateStatus(message) {
@@ -1090,73 +1193,8 @@
             if (statusElement) {
                 statusElement.textContent = message;
                 statusElement.scrollTop = statusElement.scrollHeight;
-                console.log('[Loading] ' + message);
-            } else {
-                console.log('[Loading] (no element yet) ' + message);
             }
         };
-
-        // Control functions
-        function playMusic() {
-            if (!isWasmLoaded) return;
-
-            try {
-                // Resume Web Audio Context if needed (required for modern browsers)
-                let audioPromise = Promise.resolve();
-
-                // Check SDL audio context
-                if (typeof SDL !== 'undefined' && SDL.audioContext) {
-                    if (SDL.audioContext.state === 'suspended') {
-                        console.log('Resuming SDL Web Audio Context...');
-                        audioPromise = SDL.audioContext.resume();
-                    }
-                }
-
-                // Check Module audio context (alternative location)
-                if (typeof Module !== 'undefined' && Module.audioContext) {
-                    if (Module.audioContext.state === 'suspended') {
-                        console.log('Resuming Module Web Audio Context...');
-                        audioPromise = Module.audioContext.resume();
-                    }
-                }
-
-                audioPromise.then(() => {
-                    console.log('Web Audio Context ready, starting playback...');
-                    Module.ccall('play', null, [], []);
-                    updateStatus('Playback started');
-                }).catch((error) => {
-                    console.error('Failed to resume Web Audio Context:', error);
-                    // Try to start playback anyway
-                    Module.ccall('play', null, [], []);
-                    updateStatus('Playback started');
-                });
-
-            } catch (error) {
-                showError('Failed to start playback: ' + error.message);
-            }
-        }
-
-        function pauseMusic() {
-            if (!isWasmLoaded) return;
-
-            try {
-                Module.ccall('pause_playback', null, [], []);
-                updateStatus('Paused');
-            } catch (error) {
-                showError('Failed to pause playback: ' + error.message);
-            }
-        }
-
-        function stopMusic() {
-            if (!isWasmLoaded) return;
-
-            try {
-                Module.ccall('stop', null, [], []);
-                updateStatus('Stopped');
-            } catch (error) {
-                showError('Failed to stop playback: ' + error.message);
-            }
-        }
 
         // SDL2 is configured to listen on document level (via SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT)
         // DO NOT add any JavaScript keyboard handlers here - they will intercept events before SDL gets them!
@@ -1205,74 +1243,54 @@
     <!-- IDBFS Persistence: Save data before page unload -->
     <script>
         (function() {
-            // Track if IDBFS sync is in progress
-            let idbfsSyncInProgress = false;
-
-            // Handler for page visibility changes and unload
             function syncIDBFSBeforeUnload() {
-                if (idbfsSyncInProgress) {
-                    console.log('IDBFS sync already in progress, skipping');
-                    return;
+                if (typeof Module !== 'undefined' && typeof Module._idbfs_flush === 'function') {
+                    try {
+                        Module._idbfs_flush();
+                        return;
+                    } catch (e) {
+                        console.error('IDBFS flush failed:', e);
+                    }
                 }
-
                 if (!Module || !Module.FS || !Module.FS.syncfs) {
-                    console.log('IDBFS not available yet');
                     return;
                 }
-
-                console.log('Syncing IDBFS before page unload...');
-                idbfsSyncInProgress = true;
-
                 try {
-                    // Synchronous sync attempt (browser may kill us before async completes)
                     Module.FS.syncfs(false, function(err) {
-                        idbfsSyncInProgress = false;
                         if (err) {
                             console.error('IDBFS sync error on unload:', err);
-                        } else {
-                            console.log('IDBFS sync completed successfully');
                         }
                     });
                 } catch (e) {
                     console.error('IDBFS sync exception:', e);
-                    idbfsSyncInProgress = false;
                 }
             }
 
-            // Page visibility API - sync when page becomes hidden
             document.addEventListener('visibilitychange', function() {
                 if (document.hidden) {
                     syncIDBFSBeforeUnload();
                 }
             });
 
-            // Beforeunload event - final sync attempt
-            window.addEventListener('beforeunload', function(e) {
-                syncIDBFSBeforeUnload();
-                // Note: Modern browsers ignore custom messages, but we still call syncfs
-            });
+            window.addEventListener('pagehide', syncIDBFSBeforeUnload);
+            window.addEventListener('beforeunload', syncIDBFSBeforeUnload);
 
-            // Periodic background sync (every 60 seconds)
             setInterval(function() {
-                if (!document.hidden && !idbfsSyncInProgress && Module && Module.FS && Module.FS.syncfs) {
-                    console.log('Periodic IDBFS background sync...');
-                    idbfsSyncInProgress = true;
-                    Module.FS.syncfs(false, function(err) {
-                        idbfsSyncInProgress = false;
-                        if (err) {
-                            console.error('Periodic IDBFS sync error:', err);
-                        } else {
-                            console.log('Periodic IDBFS sync completed');
-                        }
-                    });
+                if (document.hidden) {
+                    return;
                 }
-            }, 60000); // 60 seconds
-
-            console.log('IDBFS persistence handlers installed');
+                if (typeof Module !== 'undefined' && typeof Module._idbfs_flush === 'function') {
+                    try {
+                        Module._idbfs_flush();
+                    } catch (e) {
+                        console.error('Periodic IDBFS flush failed:', e);
+                    }
+                }
+            }, 60000);
         })();
     </script>
 
-    <!-- Provide dynCall fallbacks for modern Emscripten builds before ocp.js loads -->
+    <!-- dynCall fallbacks. Keep every dynCall_* signature from wasm/CMakeLists.txt in this list. wasm/tests/dyncall-list.test.js checks that. -->
     <script>
         (function() {
             const signatures = [
@@ -1339,9 +1357,18 @@
         <ul>
             <li>Use "Open a module from this computer" above, or drop a file on that box. The bytes are written to /music and show up in the on-canvas file selector.</li>
             <li>Open the file from that selector. Playback controls are the desktop player's keys inside the canvas. F returns to the selector during playback. Esc returns to the selector in this browser build. Press F1 for help, then F1 or Esc to close it.</li>
-            <li>Audio CD and MusicBrainz lookups are not in this build. There is no service worker. Settings are stored in this browser under /home/web_user/.ocp; closing the tab can drop the last write.</li>
+            <li>Audio CD and MusicBrainz lookups are not in this build. There is no service worker. Settings are stored in this browser. A save runs when you leave the page; the browser can still drop it if it closes the tab first.</li>
             <li>GNU GPL version 2. Source for this page is the ocp-wasm-0.1.0 tag. See COPYING and UNIFONT-LICENSE.txt.</li>
         </ul>
+    </div>
+
+    <div class="page-notes">
+        <p class="hosting">
+            <a href="https://github.com/ronaegis/opencubicplayer-wasm/blob/release/ocp-wasm-0.1.0/wasm/HOSTING.md">How to host this page</a>
+        </p>
+
+        <p class="notice" id="desktop-notice">Desktop browser: the player canvas is at least 640 pixels wide and there is no touch keyboard.</p>
+        <p class="notice" id="modland-notice">The Modland drive contacts the third-party host modland.com and downloads a module when you open it.</p>
     </div>
 
     <!-- Load the generated WASM script -->
@@ -1506,6 +1533,18 @@
             });
         }
     </script>
-    <script src="ocp.js?v=13"></script>
+    <script>
+        (function() {
+            var s = document.createElement('script');
+            s.src = 'ocp.js?v=' + OCP_ASSET_VERSION;
+            s.async = false;
+            s.onerror = function() {
+                if (typeof ocpShowFatalError === 'function') {
+                    ocpShowFatalError('Failed to load ocp.js. The page package is incomplete or the server blocked it.');
+                }
+            };
+            document.body.appendChild(s);
+        })();
+    </script>
 </body>
 </html>
